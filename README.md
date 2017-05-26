@@ -3,22 +3,26 @@ The Gluu Server supports UMA protection for SCIM endpoints from Gluu Server CE 2
 A machine based authorization method is used to obtain access tokens. SCIM/UMA is built
 into the Gluu Server CE and does not require any special package or installation. 
 
-##Installation
+## Requirements
 
 * Install Gluu Server CE following the [Installation Guide](../installation-guide/index.md). The setup script prepares all 
-configurations needed for SCIM UMA RS endpoints and SCIM UMA RP client; **RP** stands for requesting party, and **RS** stands for resource server. See terminology and definitions for UMA [here](https://docs.kantarainitiative.org/uma/rec-uma-core.html#introduction)
+configurations needed for SCIM UMA RS endpoints and SCIM UMA RP client; **RP** stands for requesting party, and **RS** stands for resource server. See terminology and definitions for UMA [here](https://docs.kantarainitiative.org/uma/rec-uma-core.html#introduction).
 
-* Locate your SCIM RS and SCIM RP Client IDs. These are found in the file `/install/community-edition-setup/setup.properties.last` inside the chroot container of your Gluu CE installation. Use the following command to extract those properties quicky: `cat setup.properties.last | grep "scim_rs_client_id\|scim_rp_client_id"`.
+* Locate your SCIM RS and SCIM RP Client IDs. These are found in the file `/install/community-edition-setup/setup.properties.last` inside the chroot container of your Gluu CE installation. Use the following command to extract those quicky: `cat setup.properties.last | grep "scim_rs_client_id\|scim_rp_client_id"`.
 
-* The UMA SCIM client requires JWKS. The keystore file is located at `/install/community-edition-setup/output/scim-rp.jks`. The password associated to this keystore is found in setup.properties.last and defaults to "secret".
+* The UMA SCIM client requires JWKS. The keystore file is located at `/install/community-edition-setup/output/scim-rp.jks`. The password associated to this keystore is found in `setup.properties.last` and defaults to "*secret*".
 
 **NOTE:** For versions earlier than v2.4.4, the JWKS file resides in `/install/community-edition-setup/output/scim-rp-openid-keys.json` instead.
 
 ##Configuration
 
+* Activate UMA custom script in Gluu's CE web UI. Go to Configuration > Manage Custom Scripts, and in the tab for "UMA Authorization policies" check "Enabled" at the bottom.
+
+![enable uma](../img/scim/enable_uma.png)
+
 * Enable SCIM from Organization Configuration
 
-![image](../img/scim/enable-scim.png)
+![enable scim](../img/scim/enable-scim.png)
 
 * oxTrust SCIM UMA configuration is automatically updated while running 
 the `setup.py` and the correct values are setup 
@@ -35,12 +39,16 @@ in the [oxtrust-config.json](https://github.com/GluuFederation/community-edition
 
 * `umaClientKeyId` can be updated with the `alias` from `scim-rp.jks` file; if it is not updated, the first key from the file is used automatically.
 
-##Testing SCIM UMA
-The following is a sample code that can be run to test the configured SCIM 
-UMA Gluu CE. It uses [SCIM-Client](https://github.com/GluuFederation/SCIM-Client), 
-a Java library also developed by Gluu intended for client applications.
+## Testing SCIM UMA
 
-* If you are using Maven, below is how to add SCIM-Client to your project:
+The following instructions depict how to test the SCIM configuration protected by  
+UMA. It uses [SCIM-Client](https://github.com/GluuFederation/SCIM-Client) -  
+a Java library also developed by Gluu intended for client applications. For a deeper insight into this 
+topic please see [User Management with SCIM](user-scim.md).
+
+* Add the SSL certificate of your Gluu server to the JRE's `cacerts` certificate key store where your client application will run. There are lots of articles around the Web on how to import a certificate to the keystore. To get the certificate file (.crt), you may for instance open a browser and point to Gluu CE administrative console. Then, click in the icon on the left of the URL and see the certicate's details. You will be shown an option to export or save it to disk.
+
+* If you are using Maven, below is how to add the SCIM-Client to your project:
 ```
 <repositories>
   <repository>
@@ -57,49 +65,52 @@ a Java library also developed by Gluu intended for client applications.
 </dependency>
 ```
 
-* Starting with Release v2.4.2, an SCIM-Client must be used on a matching Gluu CE. For example, if you are running CE v2.4.4, you must also use SCIM-Client v2.4.4.
+As a good practice, the SCIM-Client to use should match your Gluu CE version. For example, if you are running CE v3.0.1, you must also use SCIM-Client v3.0.1.
 
-* Add your domain's SSL certificate to the JRE's `cacerts` certificate key store where your client application will run. There are lots of articles around the Web on how to do this.
-
-* Supply the UMA parameters and run the code. **_NOTE:_ If you have re-installed Gluu CE, please note that the UMA parameters / JWKS files are also regenerated. You must then rebuild your client code with `target` or `tmp` folders possibly cleared beforehand to avoid conflicts.**
-
+* Create a file with the following sample content. Here it is assumed you named the file scim-client.properties
 ```
-import java.io.IOException;
-import javax.ws.rs.core.MediaType;
-import javax.xml.bind.JAXBException;
-import org.codehaus.jackson.JsonGenerationException;
-import org.codehaus.jackson.map.JsonMappingException;
-import gluu.scim.client.ScimClient;
-import gluu.scim.client.ScimResponse;
-import gluu.scim2.client.Scim2Client;
-
-public class TestScimClient {
-
-    private static final String domain = "https://c67.gluu.info/identity/seam/resource/restv1";
-    private static final String umaMetaDataUrl = "https://c67.gluu.info/.well-known/uma-configuration";
-    private static final String umaAatClientId = "@!A410.188A.95DD.EA5A!0001!3A1E.BAA5!0008!5870.A795";
-    private static final String umaAatClientJksPath = "<local_path_to_requesting_party_jks>/scim-rp.jks";
-    private static final String umaAatClientJksPassword = "secret";
-    private static final String umaAatClientKeyId = "";
-
-    private static void testScim1Uma(String domain, String umaMetaDataUrl, String umaAatClientId, String umaAatClientJksPath, String umaAatClientJksPassword, String umaAatClientKeyId) throws IOException, JAXBException {
-
-        final ScimClient scimClient = ScimClient.umaInstance(domain, umaMetaDataUrl, umaAatClientId, umaAatClientJksPath, umaAatClientJksPassword, umaAatClientKeyId);
-        ScimResponse response = scimClient.retrievePerson("admin", MediaType.APPLICATION_JSON);
-        System.out.println("SCIM1: " + response.getResponseBodyString());
-
-    }
-
-    private static void testScim2Uma(String domain, String umaMetaDataUrl, String umaAatClientId, String umaAatClientJksPath, String umaAatClientJksPassword, String umaAatClientKeyId) throws IOException, JAXBException {
-
-        final Scim2Client scim2Client = Scim2Client.umaInstance(domain, umaMetaDataUrl, umaAatClientId, umaAatClientJksPath, umaAatClientJksPassword, umaAatClientKeyId);
-        String filter = "userName eq \"admin\"";
-        ScimResponse response = scim2Client.searchUsers(filter, 1, 1, "", "", null);
-        System.out.println("SCIM2: " + response.getResponseBodyString());
-
-    }
+json_string = {	\
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],	\
+  "externalId": "12345",	\
+  "userName": "newUser",	\
+  "name": { "givenName": "json", "familyName": "json", "middleName": "N/A", "honorificPrefix": "", "honorificSuffix": ""},	\
+  "displayName": "json json",	\
+  "nickName": "json",	\
+  "profileUrl": "http://www.gluu.org/",	\
+  "emails": [	\
+    {"value": "json@gluu.org", "type": "work", "primary": "true"},	\
+    {"value": "json2@gluu.org", "type": "home", "primary": "false"}	\
+  ],	\
+  "addresses": [{"type": "work", "streetAddress": "621 East 6th Street Suite 200", "locality": "Austin", "region": "TX", "postalCode": "78701", "country": "US", "formatted": "621 East 6th Street Suite 200  Austin , TX 78701 US", "primary": "true"}],	\
+  "phoneNumbers": [{"value": "646-345-2346", "type": "work"}],	\
+  "ims": [{"value": "test_user", "type": "Skype"}],	\
+  "userType": "CEO",	\
+  "title": "CEO",	\
+  "preferredLanguage": "en-us",	\
+  "locale": "en_US",	\
+  "active": "true",	\
+  "password": "secret",	\
+  "groups": [{"display": "Gluu Test Group", "value": "@!9B22.5F33.7D8D.B890!0001!880B.F95A!0003!60B7"}],	\
+  "roles": [{"value": "Owner"}],	\
+  "entitlements": [{"value": "full access"}],	\
+  "x509Certificates": [{"value": "cert-12345"}]	\
 }
 ```
+
+The backslashes "\" allow us to span the contents in several lines.
+
+* Create a Java class using the code below (supply suitable values for calling the `umaInstance` method):
+
+```
+Properties p= new Properties();
+p.load(new FileInputStream("scim-client.properties"));
+String jsonPerson=p.getProperty("json_string");
+
+Scim2Client client = Scim2Client.umaInstance(domain, umaMetaDataUrl, umaAatClientId, umaAatClientJksPath, umaAatClientJksPassword, umaAatClientKeyId);
+client.createPersonString(jsonPerson, MediaType.APPLICATION_JSON);
+```
+
+**NOTE:** Take into consideration that when you re-install Gluu CE, UMA parameters and JWKS files are regenerated.
 
 ## SCIM 2.0 Test Mode (v2.4.4+)
 
