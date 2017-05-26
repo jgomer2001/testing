@@ -1,6 +1,3 @@
-# testing
-To test some mark up and downs
-
 # Overview
 The Gluu Server supports UMA protection for SCIM endpoints from Gluu Server CE 2.4.0 and onward. 
 A machine based authorization method is used to obtain access tokens. SCIM/UMA is built
@@ -8,19 +5,14 @@ into the Gluu Server CE and does not require any special package or installation
 
 ##Installation
 
-* Install Gluu Server CE following the [Installation Guide](../installation-guide/index.md). The setup script prepares the 
-configuration necessary for SCIM UMA RS endpoints and SCIM UMA RP client 
-and [this template](https://github.com/GluuFederation/community-edition-setup/blob/master/templates/scim.ldif) 
-is used. 
+* Install Gluu Server CE following the [Installation Guide](../installation-guide/index.md). The setup script prepares all 
+configurations needed for SCIM UMA RS endpoints and SCIM UMA RP client; **RP** stands for requesting party, and **RS** stands for resource server. See terminology and definitions for UMA [here](https://docs.kantarainitiative.org/uma/rec-uma-core.html#introduction)
 
-> The JWKS for RS and RP clients are put into the `./output/scim.ldif` file ready for SCIM configuration. The `setup.properties.file` contains the RS and RP JWKS in Base64 format.
+* Locate your SCIM RS and SCIM RP Client IDs. These are found in the file `/install/community-edition-setup/setup.properties.last` inside the chroot container of your Gluu CE installation. Use the following command to extract those properties quicky: `cat setup.properties.last | grep "scim_rs_client_id\|scim_rp_client_id"`.
 
-* Use the following command to extract OpenID SCIM RS and RP Client ID
-` cat setup.properties.last | grep "scim_rs_client_id\|scim_rp_client_id"`
+* The UMA SCIM client requires JWKS. The keystore file is located at `/install/community-edition-setup/output/scim-rp.jks`. The password associated to this keystore is found in setup.properties.last and defaults to "secret".
 
-* The UMA SCIM client requires JWKS, so the setup script extracts the JWKS from `setup.properties.last` and puts it into the `./output/scim-rp.jks` file.
-
-**_NOTE:_ For versions before v2.4.4, the JWKS is put in the `./output/scim-rp-openid-keys.json` file instead.**
+**NOTE:** For versions earlier than v2.4.4, the JWKS file resides in `/install/community-edition-setup/output/scim-rp-openid-keys.json` instead.
 
 ##Configuration
 
@@ -167,4 +159,3 @@ public RptAuthorizationResponse requestRptPermissionAuthorization(@HeaderParam("
 
 If the default openID SCIM Client is not used, the `inum` must be added to the
 UMA Authorization Policy Custom Script.
-
