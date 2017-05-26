@@ -8,19 +8,19 @@ into the Gluu Server CE and does not require any special package or installation
 * Install Gluu Server CE following the [Installation Guide](../installation-guide/index.md). The setup script prepares all 
 configurations needed for SCIM UMA RS endpoints and SCIM UMA RP client; **RP** stands for requesting party, and **RS** stands for resource server. See terminology and definitions for UMA [here](https://docs.kantarainitiative.org/uma/rec-uma-core.html#introduction).
 
-* Locate your SCIM RS and SCIM RP Client IDs. These are found in the file `/install/community-edition-setup/setup.properties.last` inside the chroot container of your Gluu CE installation. Use the following command to extract those quicky: `cat setup.properties.last | grep "scim_rs_client_id\|scim_rp_client_id"`.
+* Locate your SCIM RS and SCIM RP Client IDs. These are found in the file `/install/community-edition-setup/setup.properties.last` inside the chroot container of your Gluu CE installation. Use the following command to extract these quicky: `cat setup.properties.last | grep "scim_rs_client_id\|scim_rp_client_id"`.
 
 * The UMA SCIM client requires JWKS. The keystore file is located at `/install/community-edition-setup/output/scim-rp.jks`. The password associated to this keystore is found in `setup.properties.last` and defaults to "*secret*".
 
 **NOTE:** For versions earlier than v2.4.4, the JWKS file resides in `/install/community-edition-setup/output/scim-rp-openid-keys.json` instead.
 
-##Configuration
+## Configuration
 
 * Activate UMA custom script in Gluu's CE web UI. Go to Configuration > Manage Custom Scripts, and in the tab for "UMA Authorization policies" check "Enabled" at the bottom.
 
 ![enable uma](../img/scim/enable_uma.png)
 
-* Enable SCIM from Organization Configuration
+* Enable SCIM from Configuration > Organization Configuration
 
 ![enable scim](../img/scim/enable-scim.png)
 
@@ -36,15 +36,11 @@ in the [oxtrust-config.json](https://github.com/GluuFederation/community-edition
   "umaClientKeyStoreFile":"%(scim_rs_client_jks_fn)s",
   "umaClientKeyStorePassword":"%(scim_rs_client_jks_pass_encoded)s",
 ```
-
-* `umaClientKeyId` can be updated with the `alias` from `scim-rp.jks` file; if it is not updated, the first key from the file is used automatically.
+  `umaClientKeyId` can be updated with the `alias` from `scim-rp.jks` file; if it is not updated, the first key from the file is used automatically.
 
 ## Testing SCIM UMA
 
-The following instructions depict how to test the SCIM configuration protected by  
-UMA. It uses [SCIM-Client](https://github.com/GluuFederation/SCIM-Client) -  
-a Java library also developed by Gluu intended for client applications. For a deeper insight into this 
-topic please see [User Management with SCIM](user-scim.md).
+The following instructions depict how to test the SCIM configuration protected by UMA. It uses [SCIM-Client](https://github.com/GluuFederation/SCIM-Client) - a Java library also developed by Gluu intended for client applications. For a deeper insight into this topic please visit [User Management with SCIM](user-scim.md).
 
 * Add the SSL certificate of your Gluu server to the JRE's `cacerts` certificate key store where your client application will run. There are lots of articles around the Web on how to import a certificate to the keystore. To get the certificate file (.crt), you may for instance open a browser and point to Gluu CE administrative console. Then, click in the icon on the left of the URL and see the certicate's details. You will be shown an option to export or save it to disk.
 
@@ -97,7 +93,7 @@ json_string = {	\
 }
 ```
 
-The backslashes "\" allow us to span the contents in several lines.
+The backslashes "\\" allow us to span the contents in several lines.
 
 * Create a Java class using the code below (supply suitable values for calling the `umaInstance` method):
 
