@@ -181,37 +181,23 @@ Every activity in the following table contains a respective testing phase:
 |------------------------------|-----------------------|---------------|
 |Code app's front-end (most relevant aspects only)|* UI components * presentation logic...|Jul 3-7|
 |Architecture of back-end solution|define interfaces of key components, define structure of configuration files|Jul 10-12|
+|User login/logout functionality (identifier-first authn using password only)||Jul 13-14|
+|Enrollment of credentials (adding only)|Phone SMS, OTP, Super gluu, Security key|Jul 17-28|
+|Additional actions on credentials (deleting, editing)||Jul 31-Ago 4|
+|Management of preferred authn method||Ago 7-9|
+|Password reset functionality||Ago 10-11|
 
-	
 
-User login/logout functionality	Jul 13-14
-(identifier-first authn using password only) 
-	
-Enrollment of credentials (adding only)	Jul 17-28
-	Phone SMS
-	OTP
-	Super gluu
-	Security key
-
-Additional actions on credentials (deleting, editing)	Jul 31-Ago 4
-
-Management of preferred authn method	Ago 7-9
-
-Password reset functionality	Ago 10-11
-
-Configuration and deployment in remote testing environment (`erasmusdev`) Ago 14-16
-
-Testing on remote environment and fixes Ago 17-22
-
-Last round of enhancements, tests, and fixes	Ago 22-25
-
-Write doc pages for admin	Ago 28-29
-
-QA tests: *TBD*
-
-Integrations
-	Gluu's support portal: *TBD*
-	oxd license management portal:	*TBD*
+Post-dev tasks
+|Activities			|sub-tasks|proposed dates*|
+|------------------------------|-----------------------|---------------|
+|Configuration and deployment in remote testing environment (`erasmusdev`)||Ago 14-16|
+|Testing on remote environment and fixes||Ago 17-22|
+|Last round of enhancements, tests, and fixes||Ago 22-25|
+|Write doc pages for admin||Ago 28-29|
+|QA tests||*TBD*|
+|Gluu's support portal integration||TBD|
+|oxd license management portal integration||TBD|
 
 (*) *All dates are 2017*
 
