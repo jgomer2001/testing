@@ -177,16 +177,12 @@ The following describes the activities proposed to fulfil delivery of MVP versio
 
 Every activity in the following table contains a respective testing phase:
 
-|Activities			|notes|proposed dates*|
+|Activities			|sub-tasks|proposed dates*|
 |------------------------------|-----------------------|---------------|
-|Code app's front-end|most relevant aspects only|Jul 3-7|
-|	UI components|||
-|	presentation logic|||
-|
-|Architecture of back-end solution||Jul 10-12|
+|Code app's front-end (most relevant aspects only)|* UI components * presentation logic...|Jul 3-7|
+|Architecture of back-end solution|define interfaces of key components, define structure of configuration files|Jul 10-12|
 
-	Define interfaces of key components
-	Define structure of configuration files
+	
 
 User login/logout functionality	Jul 13-14
 (identifier-first authn using password only) 
