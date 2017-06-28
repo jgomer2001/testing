@@ -167,7 +167,7 @@ Also, design and implementation decisions taken should follow these principles:
 
 The following describes the activities proposed to fulfil delivery of MVP version of credential manager:
 
-|Activities			| 		|dates|
+|Activities			| 		|scheduled dates|
 |------------------------------|-----------------------|---------------|
 |Definition of application's general requirements||Jun 7-16|
 |Revision of compatible UI frameworks for app||Jun 12-15|
@@ -177,27 +177,28 @@ The following describes the activities proposed to fulfil delivery of MVP versio
 
 Every activity in the following table contains a respective testing phase:
 
-|Activities			|sub-tasks|proposed dates*|
+|Activities			|sub-tasks|scheduled dates*|
 |------------------------------|-----------------------|---------------|
-|Code app's front-end (most relevant aspects only)|* UI components * presentation logic...|Jul 3-7|
-|Architecture of back-end solution|define interfaces of key components, define structure of configuration files|Jul 10-12|
+|Code app's front-end (most relevant aspects only)|UI components * presentation logic...|Jul 3-7|
+|Architecture of back-end solution||Jul 10-12|
 |User login/logout functionality (identifier-first authn using password only)||Jul 13-14|
-|Enrollment of credentials (adding only)|Phone SMS, OTP, Super gluu, Security key|Jul 17-28|
-|Additional actions on credentials (deleting, editing)||Jul 31-Ago 4|
-|Management of preferred authn method||Ago 7-9|
-|Password reset functionality||Ago 10-11|
+|Enrollment of credentials (adding only)|Phone SMS, OTP, Super gluu, Security keys|Jul 17-28|
+|Additional actions on credentials (deleting, editing)||Jul 31-Ago 11|
+|Management of preferred authn method||Ago 14-16|
+|Password reset functionality||Ago 17-18|
 
 
 Post-dev tasks
-|Activities			|sub-tasks|proposed dates*|
+
+|Activities			|scheduled dates*|
 |------------------------------|-----------------------|---------------|
-|Configuration and deployment in remote testing environment (`erasmusdev`)||Ago 14-16|
-|Testing on remote environment and fixes||Ago 17-22|
-|Last round of enhancements, tests, and fixes||Ago 22-25|
-|Write doc pages for admin||Ago 28-29|
-|QA tests||*TBD*|
-|Gluu's support portal integration||TBD|
-|oxd license management portal integration||TBD|
+|Configuration and deployment in remote testing environment (`erasmusdev`)|Ago 21-23|
+|Testing on remote environment and fixes|Ago 24-29|
+|Last round of enhancements, tests, and fixes|Ago 30- Sept 1|
+|Write doc pages for admin|Sep 4-5|
+|QA tests|*TBD*|
+|Gluu's support portal integration|TBD|
+|oxd license management portal integration|TBD|
 
 (*) *All dates are 2017*
 
