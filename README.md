@@ -1,204 +1,97 @@
-# Credential Manager 
+# Credential manager 
 
-# What is credential manager?
+Please visit [wiki](https://github.com/GluuFederation/cred-manager/wiki/Cred-Manager-Project-Doc) to learn more. Most stuff here is correlated with the contents of this [page](https://github.com/GluuFederation/cred-manager/wiki/Technical-considerations).
 
-A web application that will allow users to self service the management of their various credentials. A user may handle any combination of credentials types such as:
-* U2F security keys
-* OTP
-* Super Gluu devices
-* Mobile phone numbers (for delivering passcodes via SMS)
+## Java Packages Hierarchy
 
-The management consists of enrolling new credentials (devices), and updating or deleting existing ones. Also, the application will allow users to choose  their preferred method for authentication: whether using basic password only or enabling two-factor authentication with the usage of already enrolled devices.
+#### Top-level package
+*org.gluu.credmanager*
 
-# Project's scope
+#### User Interface packages
 
-Initially this project is aimed at delivering a MVP which will be available for users of Gluu's support portal and the oxd license management portal. This will allow us to elicit valuable feedback from customers to enrich the capabilities of the web app itself. 
+*ui.vm*: ZK's viewmodel (cred-manager uses the MVVM pattern, see [ZK documentation](https://www.zkoss.org/documentation))
+*ui.model*: Model classes (in MVVM pattern)
 
-For this MVP no license is needed, however, the app requires oxd (a licensed middleware component).
+#### Core logic packages
 
-This [file](https://trello-attachments.s3.amazonaws.com/57150e91a415045e27c57ad0/594155c64b012a416ca2e8dc/abf35915d9ba6ab467b06117dbf43dca/cred-manager-mockups.png) is the mockup of credential manager and depicts to a good extent how it will look like and the functionalities it is expected to include. Note the representation of credential types mentioned above and the existence of two roles: a *regular user*, and an *administrator user*.
+*core*
+*core.init*: Initialization of web-app, sessions, etc
+*core.ortho*: cross-cutting tasks (e.g. logging & auditing): concerns which are orthogonal to the application, e.g. implemented as WELD Interceptors
+*core.navigation*: Session management and page navigation
 
+#### Services packages
 
-# Requirements
+*services.ldap*
+*services.scim*
+*services.oxd*
+*services.filesystem*
+*services.oxauth*
+*services.sms*
 
-## The actors
+#### Configuration package
 
-A *regular user* will be able to do management of its own credentials, as well as using login and logout functionalities.
+*conf*: Contains an application-scoped singleton to hold/sync config params
+	
+#### Miscelaneous package
 
-An *admin user* (who is a Gluu server administrator) has access to the same functionalities. He is also allowed to set up configurations needed for credential manager. These functionalities will not be accessible by the UI itself and will take place by tweaking configuration files. The app will have a help page for admins to learn how to configure credential manager behavior.
+*misc*: Contains static classes with utilities, wraps oxcore functionality
 
+	
+#### Notes
 
-## Functional requirements
+Whenever possible:
+*ui* uses: *conf*, *core*
+*core* uses: *conf*, *service*, *misc*
 
+## Application Initialization
 
-### 2FA behavior and preferred method
+When starting up, the following is looked up:
 
-Second-factor authn will come into play only after a user has added at least two credentials in the app. Otherwise, the effective mechanism that takes place is user+password authn.
+* Location of configuration file: A file named `cred-manager.json` is expected to reside inside a `conf` directory placed in a folder whose location is given by the system property *gluu.base* (usually set in the start.ini file of the corresponding jetty base of this web app). If system property is not present, default value is /etc/gluu. 
 
-As an example, assume the admin user of a credential manager installation has enabled the following for his organization: supergluu, google authenticator, and U2F keys. Thus, users of that particular installation have to add any of the following before being able to set his preferred authentication method (and taking advantage of 2FA):
+This just follows the same pattern currently used in **oxAuth** and **oxTrust**.
 
-* 2 U2F keys
-* 1 U2F key and 1 mobile app
-* 2 mobile apps
+For the first time, **oxd** registration should take place. See the appropriate section.
 
-where "mobile app" can be any of: supergluu, google authenticator.
+## Configuration File Structure
 
-If a user has added none or only one credential, he will be warned that he cannot set a preferred method other than password until he takes appropriate action. 
+Location example: `/etc/gluu/conf/cred-manager.json`
+Contents example:
+```
+{
+	"ldap_settings":{
+		"ox-ldap_location": "/etc/gluu/conf/ox-ldap.properties",	//mandatory. location of ox-ldap.properties file
+		"salt" : "/etc/gluu/conf/salt", //Optional. location of salt properties file
+		"applianceInum": "@!3245.DF39.6A34.9E97!0002!CFBE.8F9E",
+		"orgInum": "@!3245.DF39.6A34.9E97!0001!513A.9888"
+	},
+	"enable_pass_reset": true,	//optional
+	"oxd_config": { "host": "localhost", "port": 8099, "oxd-id": "...", "authz_redirect_uri" : "..." , "post_logout_uri": "..." },	//mandatory (except for "oxd-id")
+	"enabled_methods": [],		//optional
+	"twilio_settings": { "account_sid": "", "auth_token" : "", "from_number": }	//optional. Provide if sms was added in enabled_methods or if inferred methods will contain SMS
+}
 
-Whenever the condition is met (at least two enrolled credentials), he will be advised to change his preferred method.
+### Notes on parameters inference:
+* This app uses `ox-ldap.properties` file to lookup LDAP connection settings. Once connected to LDAP, this app will find:
+	* displayName attribute in the `o` branch to determine the organization name
+	* oxTrust's oxTrustConfCacheRefresh attribute to determine if a source backend LDAP is enabled ("sourceConfigs" property in JSON). If so, password reset won't be enabled regardless of the value of *"enable_pass_reset"*. If *"enable_pass_reset"* is not provided and there is no enabled backend LDAP detected, a default value of false is assumed.
+	* oxAuth's oxAuthConfDynamic attribute to get:
+		* the OIDC config endpoint (property "openIdConfigurationEndpoint" in JSON)
+* app checks Implementation-Version entry in `MANIFEST.MF` file inside `oxauth.war` to guess Gluu version it is running on
+* If *"enabled_methods"* is not present, or has empty value or null, then all supported methods will be enabled. The exact set of methods is deduced after inspecting acr_supported_values in the server. Depending on current server setup, this can lead to only password (no 2FA at all).
+* If *"oxd-id"* is not present, or has empty value or null, registration of this app with **oxd** will take place.
 
-See [Available authentication methods](#available-authentication-methods) for more on this regard.
+### "Hidden" properties
+These are extra properties that can be set in the JSON file to tweak certain behaviors. Mostly useful in development and testing scenarios:
+* *"gluu_version"*: This will obviate the need for inspecting oxauth.war to find out the version being used. Value is provided as string.
 
-### Home page contents
+## OXD Registration
 
-The landing page of the app (after user's authentication takes place) will show the summary of credentials added so far. For every credential type enabled by the admin (e.g. mobile phone, U2F key), the user will see:
+If *"oxd-id"* is null, empty or non-existing, cred-manager will try to execute the "register site" step with the oxd server whose host and port is already provided in *"oxd_config"*. Once an oxdId is grabbed, the app. will update the config file so that it contains this value.
 
-* Number of enrolled credentials of this type
-* The nicknames of such credentials
-* A link/button to a [full-view page](#full-view-page) for this type of credentials
+For registration, the following are also passed: authz_redirect_uri, post_logout_uri. All other parameters will be the defaults used by oxd.
 
-Additionally, in this page users can:
 
-* Choose their preferred method for authn (only if the 2FA criterion is met, see above)
-* Change their passwords (if the admin has enabled this functionality). Particularly, when typing a new password, the app will hint users about the strength of such password.
+## Logging
 
-The following sub-sections list data needed to **enroll** credentials according to type:
-
-#### Mobile phone number
-
-* Nickname for this phone number
-* Mobile phone number
-* A code sent via SMS
-
-#### U2F security keys
-
-* Nickname for key
-
-See additional considerations [here](#fido-u2f-restrictions)
-
-#### Super Gluu
-
-* Nickname for device
-
-*Note:* Super gluu mobile app must be installed on device beforehand.
-
-#### Google Authenticator
-
-* Nickname for device
-
-*Note:* Mobile app must be installed on device beforehand.
-
-
-### Full-view page
-
-Every credential type will have a proper page so that users can list or alter credentials of that type. For listing, the following attributes will be displayed:
-* Nickname
-* Date-time added
-* Last used date-time
-* Phone number (only for this type of credential)
-
-*Notes:*
-* Updating a credential involves assigning a different nickname for the credential. For changing additional attributes, the user will have to delete that credential and do enrollment once more.
-
-* Deleting a credential only requires prompting the user for completing the action. This action cannot be undone. Also, this may potentially restore the preferred authn mechanism to "password".
-
-### Use of identifier-first authentication
-
-To instruct the IDP (Gluu server) to present the user with certain authentication method, an appropriate `acr_value` must be passed in the `Get authorization URL` step of OIDC. For this to happen, the application must "identify" the user beforehand to be able to determine which preferred method to pass (i.e. lookup in LDAP).
-
-Hence, when a user tries to visit the home page of credential manager, this flow occurs:
-* A form field is presented to the user asking to enter his username. Then he/she presses a "next" button
-* A new field appears where user can choose the authn method wanted for this session. This list is populated with values applicable for the current cred. manager installation (see [Available authentication methods](#available-authentication-methods)). Default selected method corresponds to the already-set preferred method for this user or "password" if he has none.
-* User presses a "next" button and is taken to the SSO form where authentication takes place according to `acr_value` passed
-
-### Application configuration details
-
-#### Available authentication methods 
-
-This [image](https://github.com/GluuFederation/cred-manager/raw/master/imgs/arch_detailed.jpg) gives a good perspective of the runtime context of the application. As oxAuth is required (and hence, a Gluu Server CE installation),  methods supported for authentication vary depending on customer setup. As a result, credential manager will be able to offer (at most) only methods already supported by the gluu server, namely, those listed in the `acr_values_supported` property of the OpenID Connect configuration metadata URL.
-
-#### Configuration file
-
-In a single file written in JSON format, the admin will be able to:
-
-* Constraint the authentication mechanisms supported (a subset from U2F, Super Gluu, OTP, SMS) taking into account the methods already supported by the local Gluu CE installation
-* Enable password reset (if this is not the case, the UI will hide any detail about this functionality for users)
-* oxd settings: host, port, oxid
-* OpenID connect metadata URL
-* SCIM v2 service URL
-* Settings for SMS delivery (e.g. twilio account)
-* Settings for local LDAP connection
-
-## Non-functional requirements
-
-### UI
-Credential manager must run and look consistently on a variety of devices, whether desktop or mobile, regardless of underlying browser, operating system, or screen size. The app is expected to deliver a comfortable experience in terms of usability and responsiveness.
-
-In `https://erasmusdev.gluu.org/cred-manager/user.zul` there is a small UI prototype for credential manager.
-
-### FIDO U2F restrictions
-* Only certain browsers allow enrollment of U2F security keys. The user should be alerted if his browser does not support this capability.
-* Only computers with USB port availability will allow enrolling U2F security keys.
-
-## Requirements to be included in future versions
-
-### UI customizations
-
-To enable branding, credential manager should be customizable so that customers can make it match their own existing web design. This should be performed by adding CSS and images (logos, icons) to the app.
-
-### E-mail notifications
-
-### Auditing capabilities
-
-### Connected apps and sites
-
-### Profile management
-
-
-# Technical decisions
-
-With exception of e-mail messaging, all considerations stated [here](Technical-considerations) still apply for the MVP.
-
-Also, design and implementation decisions taken should follow these principles:
-* Flexibility: this app will require adding functionalities and doing enhancements specially after its inception, so this is a fact to keep in mind
-* Simplicity: this also favors the evolution of the app and helps keeping the project manageable
-
-# Project plan
-
-The following describes the activities proposed to fulfil delivery of MVP version of credential manager:
-
-|Activities			| 		|scheduled dates|
-|------------------------------|-----------------------|---------------|
-|Definition of application's general requirements||Jun 7-16|
-|Revision of compatible UI frameworks for app||Jun 12-15|
-|Revision of projects to reuse for app implementation||Jun 15-21|
-|Create UI prototype and feedback session||Jun 19-26|
-|Refine scope for MVP||26-30|
-
-Every activity in the following table contains a respective testing phase:
-
-|Activities			|sub-tasks|scheduled dates*|
-|------------------------------|-----------------------|---------------|
-|Code app's front-end (most relevant aspects only)|UI components * presentation logic...|Jul 3-7|
-|Architecture of back-end solution||Jul 10-12|
-|User login/logout functionality (identifier-first authn using password only)||Jul 13-14|
-|Enrollment of credentials (adding only)|Phone SMS, OTP, Super gluu, Security keys|Jul 17-28|
-|Additional actions on credentials (deleting, editing)||Jul 31-Ago 11|
-|Management of preferred authn method||Ago 14-16|
-|Password reset functionality||Ago 17-18|
-
-
-Post-dev tasks
-
-|Activities			|scheduled dates*|
-|------------------------------|-----------------------|---------------|
-|Configuration and deployment in remote testing environment (`erasmusdev`)|Ago 21-23|
-|Testing on remote environment and fixes|Ago 24-29|
-|Last round of enhancements, tests, and fixes|Ago 30- Sept 1|
-|Write doc pages for admin|Sep 4-5|
-|QA tests|*TBD*|
-|Gluu's support portal integration|TBD|
-|oxd license management portal integration|TBD|
-
-(*) *All dates are 2017*
-
+Log4j2 framework is used and configure via a file named log4j2.xml located at `/WEB-INF/classes`. It uses the system property *log.base* (found in the start.ini file of the corresponding jetty base of this app) to determine where to write logs.
