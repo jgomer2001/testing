@@ -9,24 +9,24 @@ Please visit [wiki](https://github.com/GluuFederation/cred-manager/wiki/Cred-Man
 
 #### User Interface packages
 
-*ui.vm*: ZK's viewmodel (cred-manager uses the MVVM pattern, see [ZK documentation](https://www.zkoss.org/documentation))
+*ui.vm*: ZK's viewmodel (cred-manager uses the MVVM pattern, see [ZK documentation](https://www.zkoss.org/documentation)) 
 *ui.model*: Model classes (in MVVM pattern)
 
 #### Core logic packages
 
-*core*
-*core.init*: Initialization of web-app, sessions, etc
-*core.ortho*: cross-cutting tasks (e.g. logging & auditing): concerns which are orthogonal to the application, e.g. implemented as WELD Interceptors
-*core.navigation*: Session management and page navigation
+*core* 
+*core.init*: Initialization of web-app, sessions, etc 
+*core.ortho*: cross-cutting tasks (e.g. logging & auditing): concerns which are orthogonal to the application, e.g. implemented as WELD Interceptors 
+*core.navigation*: Session management and page navigation 
 
 #### Services packages
 
-*services.ldap*
-*services.scim*
-*services.oxd*
-*services.filesystem*
-*services.oxauth*
-*services.sms*
+*services.ldap* 
+*services.scim* 
+*services.oxd* 
+*services.filesystem* 
+*services.oxauth* 
+*services.sms* 
 
 #### Configuration package
 
@@ -40,14 +40,14 @@ Please visit [wiki](https://github.com/GluuFederation/cred-manager/wiki/Cred-Man
 #### Notes
 
 Whenever possible:
-*ui* uses: *conf*, *core*
+*ui* uses: *conf*, *core* 
 *core* uses: *conf*, *service*, *misc*
 
 ## Application Initialization
 
 When starting up, the following is looked up:
 
-* Location of configuration file: A file named `cred-manager.json` is expected to reside inside a `conf` directory placed in a folder whose location is given by the system property *gluu.base* (usually set in the start.ini file of the corresponding jetty base of this web app). If system property is not present, default value is /etc/gluu. 
+* Location of configuration file: A file named `cred-manager.json` is expected to reside inside a `conf` directory placed in a folder whose location is given by the system property *gluu.base* (usually set in the `start.ini` file of the corresponding jetty base of this web app). If system property is not present, default value is /etc/gluu. 
 
 This just follows the same pattern currently used in **oxAuth** and **oxTrust**.
 
@@ -70,6 +70,7 @@ Contents example:
 	"enabled_methods": [],		//optional
 	"twilio_settings": { "account_sid": "", "auth_token" : "", "from_number": }	//optional. Provide if sms was added in enabled_methods or if inferred methods will contain SMS
 }
+```
 
 ### Notes on parameters inference:
 * This app uses `ox-ldap.properties` file to lookup LDAP connection settings. Once connected to LDAP, this app will find:
