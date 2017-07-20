@@ -15,17 +15,25 @@ Please visit [wiki](https://github.com/GluuFederation/cred-manager/wiki/Cred-Man
 #### Core logic packages
 
 *core* 
+
 *core.init*: Initialization of web-app, sessions, etc 
+
 *core.ortho*: cross-cutting tasks (e.g. logging & auditing): concerns which are orthogonal to the application, e.g. implemented as WELD Interceptors 
+
 *core.navigation*: Session management and page navigation 
 
 #### Services packages
 
 *services.ldap* 
+
 *services.scim* 
+
 *services.oxd* 
+
 *services.filesystem* 
+
 *services.oxauth* 
+
 *services.sms* 
 
 #### Configuration package
@@ -84,15 +92,15 @@ Contents example:
 
 ### "Hidden" properties
 These are extra properties that can be set in the JSON file to tweak certain behaviors. Mostly useful in development and testing scenarios:
-* *"gluu_version"*: This will obviate the need for inspecting oxauth.war to find out the version being used. Value is provided as string.
+* *"gluu_version"*: This will obviate the need for inspecting `oxauth.war` to find out the version being used. Value is provided as string.
 
 ## OXD Registration
 
 If *"oxd-id"* is null, empty or non-existing, cred-manager will try to execute the "register site" step with the oxd server whose host and port is already provided in *"oxd_config"*. Once an oxdId is grabbed, the app. will update the config file so that it contains this value.
 
-For registration, the following are also passed: authz_redirect_uri, post_logout_uri. All other parameters will be the defaults used by oxd.
+For registration, the following are also passed: *authz_redirect_uri*, *post_logout_uri*. All other parameters will be the defaults used by oxd.
 
 
 ## Logging
 
-Log4j2 framework is used and configure via a file named log4j2.xml located at `/WEB-INF/classes`. It uses the system property *log.base* (found in the start.ini file of the corresponding jetty base of this app) to determine where to write logs.
+Log4j2 framework is used and configure via a file named `log4j2.xml` located at `/WEB-INF/classes`. It uses the system property *log.base* (found in the `start.ini` file of the corresponding jetty base of this app) to determine where to write logs.
