@@ -1,20 +1,23 @@
 # User Management with SCIM
 
-This section outlines how to do user management with the System for Cross-domain Identity Management - SCIM.
+This page outlines how to do basic user management with the System for Cross-domain Identity Management - SCIM.
 
-SCIM is an specification designed to reduce the complexity of user management operations by providing a common user schema and the patterns for exchanging this schema using HTTP in a platform-neutral fashion. The aim of SCIM is achieving interoperability, security, and scalability in the context of identity management.
 
-Current version of the specification (SCIM v2) is governed by the following documents: RFC [7642] (https://tools.ietf.org/html/rfc7642), [7643](https://tools.ietf.org/html/rfc7643), and [7644](https://tools.ietf.org/html/rfc7644).
+## Introduction
+
+SCIM is a specification designed to reduce the complexity of user management operations by providing a common user schema and the patterns for exchanging this schema using HTTP in a platform-neutral fashion. The aim of SCIM is achieving interoperability, security, and scalability in the context of identity management.
+
+Current version of the specification - 2.0 - is governed by the following documents: [RFC 7642](https://tools.ietf.org/html/rfc7642), [RFC 7643](https://tools.ietf.org/html/rfc7643), and [RFC 7644](https://tools.ietf.org/html/rfc7644).
 
 !!! Note
     Despite the existence of an endpoint for version 1.0, we strongly encourage the usage of version 2.0 of SCIM. 
 
-The SCIM protocol does not define a specific scheme for authentication or authorization. In section 2 of [RFC 7644](https://tools.ietf.org/html/rfc7644) a few guidelines are given that implementors could embrace. For security concerns, we suggest protecting your SCIM endpoints with [UMA](scim-uma.md), however, for testing purposes you can temporarily enable the test mode that uses a "Bearer token" approach.
+The SCIM protocol does not define a specific scheme for authentication or authorization. In section 2 of [RFC 7644](https://tools.ietf.org/html/rfc7644) a few guidelines are given that implementors may embrace. We suggest protecting your SCIM endpoints with [UMA](scim-uma.md), however, for testing purposes you can temporarily enable the test mode that uses a "Bearer token" approach.
+
+## Using test mode (v2.4.4+)
 
 !!! Warning
     Test mode is a weak security approach to protect your service. This feature could be changed or removed in future releases of Gluu Server.
-
-## Using test mode (v2.4.4+)
 
 Starting with CE v2.4.4, the "test mode" configuration helps developers and administrators test the SCIM 2.0 endpoints easily. Instead of combining UMA protection and a client, in test mode a long-lived OAuth2 access token issued by the Gluu server is used to authorize access to endpoints.
 
@@ -30,8 +33,7 @@ then locate the property `scimTestMode`.
 * Click the `Save Configuration` button. 
 
 The Gluu server will then create a long-lived OAuth2 access token with a 
-validity period of one year. Doing this will also switch the authorization
-scheme from UMA to OAuth2 Access Token.
+validity period of one year.
 
 * Click on `JSON Configuration` > `OxTrust Configuration` in the left navigation pane. 
 This will retrieve the access token and will display it at the `scimTestModeAccessToken` property.
@@ -45,15 +47,14 @@ parameter `access_token` when accessing the endpoints, for example:
 
 ![image](../img/scim/scim-test-mode-example.png)
 
-You can verify the current authentication scheme of the SCIM 2.0 
-endpoints by browsing its `ServiceProviderConfig`:
+You can verify the current authentication scheme by querying the `ServiceProviderConfig` endpoint:
 
 ![image](../img/scim/scim-test-mode-config.png)
 
 To exit test mode, just set `scimTestMode` back to `false` then 
  click the `Save Configuration` button. This will switch the 
 authentication scheme from OAuth2 Access Token to UMA. If you try using 
-your access token again, you will now get the `403 Unauthorized` error:
+your access token again, you will get the `403 Unauthorized` error:
 
 ![image](../img/scim/scim-test-mode-403.png)
 
@@ -62,10 +63,10 @@ your access token again, you will now get the `403 Unauthorized` error:
 
 For the sake of simplicity and to lower the barrier to start with SCIM, some raw HTTP sample requests are presented in this section. These requests exemplify how to do very basic CRUD on SCIM resources. While only users are being covered, you can extrapolate to groups and other kind of resources if any.
 
-Examples shown here cover very little of what's possible to achieve with the SCIM REST API. For richer or advanced use cases, you may like to glance at the spec. The page [SCIM API](../api-guide/scim-api/#user-endpoint) offers a condensed and more amenable way to read reference so that you can compose your requests more easily.
+Examples shown here cover very little of what's possible to achieve with the SCIM REST API. For richer or advanced use cases, you may like to glance at the spec. The page [SCIM API](../api-guide/scim-api/#user-endpoint) offers a condensed and more amenable to read reference so that you can compose your requests with ease.
 
 !!! Notes
-    To undertake this exercise, temporarily enable test mode (see the previous section and follow the steps) and have your access token at hand. Remember to turn off this feature once you are finished.
+    To undertake this exercise, temporarily enable test mode (see the previous section) and have your access token at hand. Remember to turn off this feature once you are finished.
     These examples make use of `curl` so ensure it's available in your testing environment.
 
 ### Creating resources
@@ -124,7 +125,7 @@ One of the simplest ways to test retrieval is querying all information about a s
 !!! Note:
     In Gluu server `inums` are lenghty and start with @!, include these two characters as well...
 
-As a response, you will get a JSON document consisting of all attributes in Schema and their corresponding values. For Joe, almost all of them will have `null` as value or empty array values, as in the following:
+As a response, you will get a JSON document consisting of all attributes in Schema and their corresponding values. For Joe, almost all of them will have a *null* or an empty array as value, as in the following:
 
 ```
 {
@@ -155,17 +156,17 @@ As a response, you will get a JSON document consisting of all attributes in Sche
 
 ### Retrieval with filtering
 
-The SCIM protocol defines a standard set of parameters that can be used to filter, sort, and paginate resources in a query response (see section 3.4.3 of RFC 7644). Filtering capabilities are very rich and enable developers to issue complex queries.
+The SCIM protocol defines a standard set of parameters that can be used to filter, sort, and paginate resources in a query response (see section 3.4.3 of [RFC 7644](https://tools.ietf.org/html/rfc7644)). Filtering capabilities are very rich and enable developers to build complex queries.
 
-In this example, we will create a fairly simple query to return the first 2 users whose `userName` contains the sequence of letters 'mi'. Results should be sorted alphabetically by `givenName`.
+In this example, we will create a fairly simple query to return the first 2 users whose `userName` contains the sequence of letters "mi". Results should be sorted alphabetically by `givenName`.
 
-Overwrite your `input.json` with the following.  Replace content in angle brackets accordingly:
+Overwrite your `input.json` with the following. Replace content in angle brackets accordingly:
 
 `access_token=<test-mode-token>&startIndex=1&count=2&sortBy=name.givenName&filter=userName%20co%20%22mi%22`
 
 !!! Notes:
     This time we are not using JSON notation for input.
-    Using the ampersand character to separe name/value pairs is typical of HTTP GET queries. 
+    The ampersand character to separe name/value pairs is typical of HTTP GET queries. 
     %20 and %22 account for white space and double quote respectively.
 
 Time to run (notice the use of -G switch):
@@ -197,8 +198,8 @@ As response you will have a JSON file that looks like this:
 
 ### Updating a user
 
-!!! note
-    SCIM spec defines two ways to update resources: HTTP PUT and PATCH. Current Gluu implementation only supports PUT (PATCH being scheduled for next release). This implies it's not possible to update single attributes but the whole resource is being replaced when the request is made.
+!!! Note
+    SCIM spec defines two ways to update resources: HTTP PUT and PATCH. Current Gluu implementation only supports PUT (PATCH being scheduled for a future release). This implies it's not possible to update single attributes but the whole resource is being replaced when the request is made.
 
 Overwrite your `input.json` with the following. Replace content in angle brackets accordingly:
 
@@ -213,7 +214,7 @@ Overwrite your `input.json` with the following. Replace content in angle bracket
 	},
 	"displayName":"Joe Smith",
 	"emails": [{
-		"value": "jsmith@whiskyland.xyz",
+		"value": "jsmith@foodstuffs.eat",
 		"type": "work",
 		"primary": "true"
 	}]	
@@ -225,7 +226,7 @@ And issue the PUT with `curl`:
 `$ curl -X PUT --cacert /opt/gluu-server-<glu-version>/etc/certs/httpd.crt -H 'Content-Type: application/scim+json' -H 'cache-control: no-cache' -d @input.json -o output.json 'https://<host-name>/identity/seam/resource/restv1/scim/v2/Users/<user-inum>?access_token=<test-mode-token>'`
 
 !!! Note
-    Surround the URL with single quotes: inums contain bang characters that might be misleading to your command line interpreter.
+    Surround the URL with single quotes: `inum`s contain bang characters that might be misleading to your command line interpreter.
 
 Response will show the same contents of a full retrieval.
 
@@ -238,14 +239,14 @@ For deleting, the DELETE method of HTTP is used.
 
 No input file is used in this case. A delete request could be the following:
 
-$ curl -X DELETE --cacert /opt/gluu-server-<glu-version>/etc/certs/httpd.crt -H 'cache-control: no-cache' 'https://<host-name>/identity/seam/resource/restv1/scim/v2/Users/<user-inum>?access_token=<test-mode-token>'
+`$ curl -X DELETE --cacert /opt/gluu-server-<glu-version>/etc/certs/httpd.crt -H 'cache-control: no-cache' 'https://<host-name>/identity/seam/resource/restv1/scim/v2/Users/<user-inum>?access_token=<test-mode-token>'`
 
 Use the `inum` of our dummy user, Average Joe.
 
 Note in LDAP or oxTrust the absence of Joe.
 
 
-### Extensions
+## Extensions
 
 [RFC 7643](https://tools.ietf.org/html/rfc7643) defines the schema for resource types in SCIM. In other words, defines structures in terms of attributes to represent users and groups as well as attribute types, mutability, cardinality, and so on. 
 
@@ -267,7 +268,7 @@ Once you submit this form, your attribute will be part of the User Extension. Yo
 
 In the JSON response, your new added attribute will appear.
 
-You can learn more about SCIM Schema and the extension model by reading [RFC 7643](https://tools.ietf.org/html/rfc7643). You can also refer to the following unit tests in SCIM-Client project for code examples in which custom attributes are involved:
+You can learn more about SCIM Schema and the extension model by reading [RFC 7643](https://tools.ietf.org/html/rfc7643). Also refer to the following unit tests in SCIM-Client project for code examples in which custom attributes are involved:
 
 * [User Extensions Object Test](https://github.com/GluuFederation/SCIM-Client/blob/version_3.0.2/src/test/java/gluu/scim2/client/UserExtensionsObjectTest.java)
 * [User Extensions JSON Test](https://github.com/GluuFederation/SCIM-Client/blob/version_3.0.2/src/test/java/gluu/scim2/client/UserExtensionsJsonTest.java)
