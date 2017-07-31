@@ -15,7 +15,7 @@ If you are really in a hurry, you can proceed straight to the [enabled section](
 
 The image shown [here](../api-guide/uma-api.md#uma-api-document) summarizes the phases and actors involved in UMA. While you don't need to get through to that complex flow in Gluu server for SCIM setup, it is important to familiarize yourself with the different parties interacting there, namely a resource owner, a client, a resource server, and an authorization server.
 
-* For the case of SCIM, the "resource" is what we are intended to protect, i.e. our database of users and groups stored in LDAP. More exactly we are interested in protecting the set of URLs that expose our data, in other words, the so-called "SCIM endpoint" - something that looks like this (`http://&lt;your_host&gt;/identity/seam/resource/restv1/scim/v2/`).
+* For the case of SCIM, the "resource" is what we are intended to protect, i.e. our database of users and groups stored in LDAP. More exactly we are interested in protecting the set of URLs that expose our data, in other words, the so-called "SCIM endpoint" - something that looks like this: `http://<your_host>/identity/seam/resource/restv1/scim/v2/`.
 
 * The resource owner is normally a legal entity (e.g. your company), or someone acting on its behalf (the administrator of Gluu CE installation). The owner should be capable of granting access to protected resources.
 
@@ -116,7 +116,7 @@ The following instructions show how to interact with the UMA-protected SCIM serv
 
 ### Start a simple project
 
-Create a project in your favorite IDE, and if using maven add the following snippet for your pom.xml file:
+Create a project in your favorite IDE, and if using maven add the following snippet to your pom.xml file:
 
 ```
 <properties>
@@ -305,7 +305,7 @@ System.out.println("response body = " + response.getResponseBodyString());
 To delete a user only his id (the `inum` LDAP attribute) is needed. You can see the `id` of the user just created by inspecting the JSON response.
 
 ```
-ScimResponse response = scim2Client.deletePerson(id);
+ScimResponse response = scim2Client.deletePerson("<inum-value>");
 assertEquals(response.getStatusCode(), 200, "User could not be deleted, status != 200");
 ```
 
