@@ -1,8 +1,8 @@
-# Credential manager 
+# CREDENTIAL MANAGER 
 
 Please visit [wiki](https://github.com/GluuFederation/cred-manager/wiki/Cred-Manager-Project-Doc) to learn more. Contents of this [page](https://github.com/GluuFederation/cred-manager/wiki/Technical-considerations) are also worth to look at.
 
-# PRELIMINARIES
+# Preliminaries
 
 ## Application Initialization
 
@@ -69,58 +69,15 @@ For registration, the following are also passed: *authz_redirect_uri*, *post_log
 
 ## Logging
 
-Log4j2 framework is used and configure via a file named `log4j2.xml` located at `/WEB-INF/classes`. It uses the system property *log.base* (found in the `start.ini` file of the app's jetty base) to determine where to write logs. [Here](https://github.com/GluuFederation/cred-manager/blob/master/configurations) you will find a sample file for `start.ini` and `log4j2.xml`.
+Log4j2 framework is used and configure via a file named `log4j2.xml` located at `/WEB-INF/classes`. It uses the system property *log.base* (found in the `start.ini` file of the app's jetty base) to determine where to write logs. [Here](https://github.com/GluuFederation/cred-manager/blob/master/configurations/log4j2.xml) you will find a sample file for `log4j2.xml`.
 
-# INSTALLATION
+# Installation
 
 ## Requirements
 
 This application requires a working installation of Gluu Server with at least the following: Apache server, LDAP server and oxAuth server. The use of oxTrust is highly recommended.
 
 * Set the following scopes to be default: `openid`, `profile`, `user_name`, `email`, `mobile_phone`, `phone`, and `clientinfo`. This can be done with oxTrust or manually in LDAP by setting the *defaultScope* attribute to **true** for the appropriate entries under the `scopes` branch.
-
-* Enable the custom scripts required for your particular case (this can be done by tweaking LDAP directly or via oxTrust). Ensure that settings of scripts are properly configured - it's recommended to test if they are working fine by logging into oxTrust and changing the authentication method: go to `Manage authentication` > `Default authentication method` > `oxTrust acr`. Besides the typical (e.g. OTP) you need to enable the `basic` script also - search for a script whose name is "basic". For a deeper insight, check `oxauth_script.log` of Gluu server. 
-
-* Once enabled, edit all scripts you have just enabled by changing the default page used in the `getPageForStep` method. That is, find the last line in such method (that looks like `return ""`) and replace by `return "/alter_login.xhtml"`. 
-
-* Add a new custom script with name **router** and whose contents are that of file `acr_router.py` that you can find [here](https://github.com/GluuFederation/cred-manager/blob/master/configurations). Set the level of script to -1. If you are using oxTrust and the UI does not let you enter that value, use the following steps as a guide for tweaking directly in LDAP:
-
-  1. Login to chroot
-  2. Issue the following replacing with a proper organization ID value and LDAP bind password
- 
-     ```
-     # /opt/opendj/bin/ldapsearch -h localhost -p 1636 -D "cn=directory manager,o=gluu" -w password -ZXT -b 'ou=scripts,o=@!...,o=gluu' -s one "&(objectclass=oxCustomScript)(displayName=router)" dn > /root/scripts.ldif
-     ```
-  
-  3. Copy the `dn` found in file `scripts.ldif`. This is the `dn` of the recently created router script.
-  
-  4. Replace the contents of `scripts.ldif` with the following (include a new line after last hyphen):
-  
-     ```
-     dn: <paste-inum-here>
-     changetype: modify
-     replace: oxLevel
-     oxLevel: -1
-     -
-     ```
-
-  5. Run the following to set the level of script:
-  
-     ```
-     # /opt/opendj/bin/ldapmodify -h localhost -p 1636 -D "cn=directory manager,o=gluu" -w password --trustAll --useSSL -f /root/scripts.ldif
-     ```
-
-* Copy the custom login pages. These will make the login flow more pleasant for users by using an *identifer-first* approach for authentication. Use the following steps as a guide for this task:
-  
-  1. Still being logged inside chroot run the following:
-  `# service oxauth stop`
-  
-  2. Copy the files `credmgr_login.xhtml`, `alter_login.page.xml` (if exists), and `alter_login.xhtml` found at [https://github.com/GluuFederation/cred-manager/blob/master/configurations](https://github.com/GluuFederation/cred-manager/blob/master/configurations) to the following location: `/opt/gluu/jetty/oxauth/custom/pages`. Use the version of files matching your Gluu server.
-  
-  3. Start oxauth:
-  `# service oxauth start`
-  
-  4. Wait a couple of minutes and check the contents of `oxauth_script.log` (found at `/opt/gluu/jetty/oxauth/logs`). You should not see errors there but only successful initialization messages.
   
 * Purchase an oxd [license](https://oxd.gluu.org). You will be given 4 bits of data: license ID, public Key, public password, and license password.
 
@@ -144,7 +101,7 @@ Use these [instructions](http://www.eclipse.org/jetty/documentation/current/quic
 
 The following switch is recommended: `--add-to-start=jsp,servlets,ssl,http,deploy,https,console-capture`
 
-Create a suitable cred-manager.json configuration file for your case and copy it wherever you like. For instance inside `etc` directory of your new jetty  base.
+Create a suitable `cred-manager.json` configuration file for your case and copy it wherever you like. For instance inside `etc` directory of your new jetty  base.
 
 Edit `start.ini` inside the jetty base and add the following:
 
@@ -156,25 +113,47 @@ jetty.http.port=<http-port-for-app>
 
 Replace content between angle brackets accordingly.
 
-Make the SSL configurations required for your Jetty instance. This can be done in different ways. Use [this](http://www.eclipse.org/jetty/documentation/current/configuring-ssl.html) as a guide.
+[Here](https://github.com/GluuFederation/cred-manager/blob/master/configurations/start.ini) it is a sample `start.ini` file.
 
-Running cred-manager over SSL is a requirement.
+Make the SSL configurations required for your Jetty instance. This can be done in different ways. You can use [this](http://www.eclipse.org/jetty/documentation/current/configuring-ssl.html) as a guide.
+
+**Note**: Running cred-manager over SSL is a requirement.
 
 ## First run of the app
 
-Copy the .war file of cred-manager to the jetty base webapps directory. You can copy a exploded directory too.  Depending on previous setup, you may need to issue a command for starting the app, or if hot deployment is used (default behavior in Jetty) this is not needed. Wait a couple of minutes while the app starts. Check the log directory corresponding to `log.base` system variable to see the progress.
+Add a new custom script with name **router** and whose contents are that of file `acr_router.py` that you can find [here](https://github.com/GluuFederation/cred-manager/blob/master/configurations). Set it to level 1.
 
-Once you see a message like "WEBAPP INITIALIZED SUCCESSFULLY" you can hit the URL of the app. You will be redirected to the IDP for username and password (depending on settings specified in `cred-manager.json`).  Do not enter any credentials by now.
+Copy the .war file of cred-manager to the jetty base webapps directory. You can copy a exploded directory too.  Depending on previous setup, you may need to issue a command for starting the app, or if hot deployment is used (default behavior in Jetty) this is not needed. Wait a couple of minutes while the app starts. Check the log directory corresponding to `log.base` system variable to see the progress. You should see a message like "WEBAPP INITIALIZED SUCCESSFULLY" .
 
-Open cred-manager.json, you should see a new attribute called "oxd-id" appears there. This means a new OIDC client was created for the app to use. This can be verified in oxTrust where a new client will appear with the name "cred-manager".
+Do not hit the URL of the app by now. Open `cred-manager.json`: you should see a new attribute called "oxd-id" appears there. This means a new OIDC client was created for the app to use. This can be verified in oxTrust where a new client appears with the name "cred-manager".
 
-Double check your Gluu server has proper acr_values_supported in the OIDC metadata document and adjust `cred-manager.json` if you wish to restrict certain types of credentials. Do not provide "enabled_methods" if you just want to be able to use all credentials supported (currently limited to OTP device, verified mobile phone, U2F key, and super gluu device only).
+## ACRs configuration
 
-Once changes are saved, you will have to restart the application.
+* Enable the custom scripts required for your particular case (this can be done by tweaking LDAP directly or via oxTrust). Ensure that settings of scripts are properly configured - it's recommended to test if they are working fine by logging into oxTrust and changing the authentication method: go to `Manage authentication` > `Default authentication method` > `oxTrust acr`. For a deeper insight, check `oxauth_script.log` of Gluu server. 
 
-Check the [troubleshooting guide](#troubleshooting) for more information
+* Besides the typical (e.g. OTP) you need to enable the `basic` script also - search for a script whose name is "basic". Set it to level 2.
 
-# TROUBLESHOOTING
+* Edit all scripts you have just enabled by changing the default page used in the `getPageForStep` method. That is, find the last line in such method (that looks like `return ""`) and replace by `return "/alter_login.xhtml"`. 
+
+* Copy the custom login pages. These will make the login flow more pleasant for users by using an *identifer-first* approach for authentication. Use the following steps as a guide for this task:
+  
+  1. Still being logged inside chroot run the following:
+  `# service oxauth stop`
+  
+  2. Copy the files `credmgr_login.xhtml`, `alter_login.page.xml` (if exists), and `alter_login.xhtml` found at [https://github.com/GluuFederation/cred-manager/blob/master/configurations](https://github.com/GluuFederation/cred-manager/blob/master/configurations) to the following location: `/opt/gluu/jetty/oxauth/custom/pages`. Use the version of files matching your Gluu server.
+  
+  3. Start oxauth:
+  `# service oxauth start`
+  
+  4. Wait a couple of minutes and check the contents of `oxauth_script.log` (found at `/opt/gluu/jetty/oxauth/logs`). You should not see errors there but only successful initialization messages.
+
+* Double check your Gluu server has proper values for *acr_values_supported* in the OIDC metadata document and adjust `cred-manager.json` if you wish to restrict certain types of credentials. Do not provide "enabled_methods" if you just want to be able to use all credentials supported (currently limited to OTP device, verified mobile phone, U2F key, and super gluu device only).
+
+* Once all configurations are applied, you will have to restart the application.
+
+Check the [troubleshooting guide](#troubleshooting) for more information.
+
+# Troubleshooting
 
 In the following some situations that may arise and corresponding solutions are summarized.
 
