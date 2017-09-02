@@ -23,8 +23,8 @@ Contents example:
 	"ldap_settings":{
 		"ox-ldap_location": "/etc/gluu/conf/ox-ldap.properties",	//Location of ox-ldap.properties file
 		"salt" : "/etc/gluu/conf/salt", //Optional. location of salt properties file
-		"applianceInum": "@!3245.DF39.6A34.9E97!0002!CFBE.8F9E",
-		"orgInum": "@!3245.DF39.6A34.9E97!0001!513A.9888"
+		"applianceInum": "@!...",
+		"orgInum": "@!..."
 	},
 	"enable_pass_reset": true,	//optional
 	"oxd_config": { "host": "localhost", "port": 8099, "oxd-id": "...", "authz_redirect_uri" : "..." , "post_logout_uri": "..." },	//"oxd-id" is optional
@@ -35,7 +35,7 @@ Contents example:
 	}
 }
 ```
-Unless otherwise stated, the params in the example are mandatory
+Unless otherwise stated, the params in the example are mandatory. You can find a sample configuration file [here](https://github.com/GluuFederation/cred-manager/blob/master/configurations/cred-manager.json). 
 
 ### Notes on parameters inference:
 * This app uses `ox-ldap.properties` file to lookup LDAP connection settings. Once connected to LDAP, this app will find:
@@ -74,36 +74,38 @@ Log4j2 framework is used and configure via a file named `log4j2.xml` located at 
 
 This application requires a working installation of Gluu Server with at least the following: Apache server, LDAP server and oxAuth server. The use of oxTrust is highly recommended.
 
-* Set the following scopes to be default: openid, profile, user_name, email, mobile_phone, phone, and clientinfo. This can be done with oxTrust or manually in LDAP by setting the *defaultScope* attribute to true for the appropriate entries under the branch of `scopes`.
+* Set the following scopes to be default: `openid`, `profile`, `user_name`, `email`, `mobile_phone`, `phone`, and `clientinfo`. This can be done with oxTrust or manually in LDAP by setting the *defaultScope* attribute to **true** for the appropriate entries under the `scopes` branch.
 
-* Enable the custom scripts required for your particular case (this can be done by tweaking LDAP directly or via oxTrust). Ensure that settings of scripts are properly configured - it's recommended to test if they are working fine by logging in to oxTrust and changing the authentication method: go to `Manage authentication` > `Default authentication method` > `oxTrust acr`. Besides the typical, e.g. OTP, you need to enable the `basic` script also - search for a script whose name is "basic". For a deeper insight, check `oxauth_script.log` of Gluu server. 
+* Enable the custom scripts required for your particular case (this can be done by tweaking LDAP directly or via oxTrust). Ensure that settings of scripts are properly configured - it's recommended to test if they are working fine by logging into oxTrust and changing the authentication method: go to `Manage authentication` > `Default authentication method` > `oxTrust acr`. Besides the typical (e.g. OTP) you need to enable the `basic` script also - search for a script whose name is "basic". For a deeper insight, check `oxauth_script.log` of Gluu server. 
 
-* Once enabled, edit all scripts you have just enabled by changing the default page used in the `getPageForStep` method. That is, find the last line in that method (that should read `return ""`) and replace by `return "/alter_login.xhtml"`. 
+* Once enabled, edit all scripts you have just enabled by changing the default page used in the `getPageForStep` method. That is, find the last line in such method (that looks like `return ""`) and replace by `return "/alter_login.xhtml"`. 
 
-* Add a new custom script with name `router` and whose contents are that of file `acr_router.py` that you can find [here](https://github.com/GluuFederation/cred-manager/blob/master/configurations). Set the level of script to -1. If you are using oxTrust and the UI does not let you enter that value, use the following steps as a guide for tweaking directly in LDAP:
+* Add a new custom script with name **router** and whose contents are that of file `acr_router.py` that you can find [here](https://github.com/GluuFederation/cred-manager/blob/master/configurations). Set the level of script to -1. If you are using oxTrust and the UI does not let you enter that value, use the following steps as a guide for tweaking directly in LDAP:
 
   1. Login to chroot
-  2. Issue the following replacing for a proper organization ID value and LDAP bind password
-  
-  `# /opt/opendj/bin/ldapsearch -h localhost -p 1636 -D "cn=directory manager,o=gluu" -w password -ZXT -b 'ou=scripts,o=@!...,o=gluu' -s one "&(objectclass=oxCustomScript)(displayName=router)" dn > /root/scripts.ldif 
+  2. Issue the following replacing with a proper organization ID value and LDAP bind password
+ 
+     ```
+     # /opt/opendj/bin/ldapsearch -h localhost -p 1636 -D "cn=directory manager,o=gluu" -w password -ZXT -b 'ou=scripts,o=@!...,o=gluu' -s one "&(objectclass=oxCustomScript)(displayName=router)" dn > /root/scripts.ldif
+     ```
   
   3. Copy the `dn` found in file `scripts.ldif`. This is the `dn` of the recently created router script.
   
   4. Replace the contents of `scripts.ldif` with the following (include a new line after last hyphen):
   
-```
-dn: <paste-inum-here>
-changetype: modify
-replace: oxLevel
-oxLevel: -1
--
-```
+     ```
+     dn: <paste-inum-here>
+     changetype: modify
+     replace: oxLevel
+     oxLevel: -1
+     -
+     ```
 
   5. Run the following to set the level of script:
   
   `# /opt/opendj/bin/ldapmodify -h localhost -p 1636 -D "cn=directory manager,o=gluu" -w password --trustAll --useSSL -f /root/scripts.ldif`
 
-* Copy the custom login pages. These will make the login flow more pleasant for users by using an *identifer-first* approach for authentication. Use the following steps as a guide for this:
+* Copy the custom login pages. These will make the login flow more pleasant for users by using an *identifer-first* approach for authentication. Use the following steps as a guide for this task:
   
   1. Still being logged inside chroot run the following:
   `# service oxauth stop`
@@ -113,7 +115,7 @@ oxLevel: -1
   3. Start oxauth:
   `# service oxauth start`
   
-  4. Wait a couple of minutes and check the contents of `oxauth_script.log` (found at /opt/gluu/jetty/oxauth/logs). You should not see errors there but only successful initialization messages.
+  4. Wait a couple of minutes and check the contents of `oxauth_script.log` (found at `/opt/gluu/jetty/oxauth/logs`). You should not see errors there but only successful initialization messages.
   
 * Purchase an oxd [license](https://oxd.gluu.org). You will be given 4 bits of data: license ID, public Key, public password, and license password.
 
