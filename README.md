@@ -1,208 +1,953 @@
-# CREDENTIAL MANAGER 
+# User Management with SCIM
 
-Please visit [wiki](https://github.com/GluuFederation/cred-manager/wiki/Cred-Manager-Project-Doc) to learn more. Contents of this [page](https://github.com/GluuFederation/cred-manager/wiki/Technical-considerations) are also worth to look at.
+SCIM is a specification designed to reduce the complexity of user management operations by providing a common user schema and the patterns for exchanging this schema using HTTP in a platform-neutral fashion. The aim of SCIM is achieving interoperability, security, and scalability in the context of identity management.
 
-# Preliminaries
+You can think of **SCIM** merely as a **REST API** with endpoints exposing **CRUD** functionality (create, retrieve update, and delete).
 
-## Application Initialization
+For your reference, current version of the specification (2.0) is governed by the following documents: [RFC 7642](https://tools.ietf.org/html/rfc7642), [RFC 7643](https://tools.ietf.org/html/rfc7643), and [RFC 7644](https://tools.ietf.org/html/rfc7644).
 
-When starting up, the following is looked up by the application:
+## API protection
 
-* Location of configuration file: A file named `cred-manager.json` is expected to reside inside a `conf` directory placed in a folder whose location is given by the system property *gluu.base* (usually set in the `start.ini` file of the corresponding jetty base of this web app). If system property is not present, default value is /etc/gluu. 
+It's clear that this API must not be anonymously accessed, however the SCIM standard does not define a specific mechanism to prevent unauthorized requests to endpoints. In this regard there are just a few guidelines in section 2 of [RFC 7644](https://tools.ietf.org/html/rfc7644) concerned with authentication and authorization. 
 
-This just follows the same pattern currently used in **oxAuth** and **oxTrust**.
+Gluu Server CE allows you to protect your endpoints with [UMA](scim-uma.md) (a profile of [OAuth 2.0](http://tools.ietf.org/html/rfc6749)). This is a safe and standardized approach for controling access to web resources. For SCIM protection, we **strongly recommend** its usage. 
 
-For the first time, **oxd** registration takes place. See the appropriate [section](#oxd-registration).
+Alternatively, for testing purposes (as well as learning) you can temporarily enable the test mode that uses a "Bearer token" approach. In test mode most complexity is taken out of the way so it serves as a quick and easy way to start interacting with your service.
 
-## Configuration File Structure
+In the next section, we will work using test mode. The topic of UMA will be explored later on.
 
-Location example: `/etc/gluu/conf/cred-manager.json`
+## Test mode
 
-Contents example:
+!!! Warning
+    Test mode is a weak security approach to protect your service. The way this feature operates in Gluu Server can change in future releases.
+
+To interact with the service in test mode, you will have to:
+
+* Activate test mode via oxTrust
+* Create an OpenId client
+* Request an access token to token endpoint
+* Extract the token from response
+* Send requests to SCIM endpoints passing the token
+* Re-obtain a new access token for subsequent requests if needed
+
+So let's elaborate on those steps.
+
+**Important notes:**
+
+* Learn how to check **Gluu Server logs**. These files usually reveal the source of problems when things are going wrong: SCIM service implementation resides in oxTrust so that's the first place to look at when in trouble. This file is located at `/opt/gluu/jetty/identity/logs/oxtrust.log`. Authorization issues (access tokens problems, for instance) are on the side of oxAuth (the authorization server), the corresponding log is at `/opt/gluu/jetty/oxauth/logs/oxauth.log`. Set the logging level for both applications to **TRACE** while trying to spot the source of errors, see the (log management)[..\operation/logs.md] page for more information.
+
+* If you already have some acquaintance with Gluu's SCIM service, please glance at [below?? what's new]() so you can contrast the current approach employed in test mode with the older one (3.0.2 and earlier).
+
+* If you are familiar to the Java programming language, you can skip the steps listed above and simply use the [below??](SCIM-Client): a Java library  developed by Gluu. Those steps are already implemented in the library so usage of the service is more transparent and pleasant.
+
+
+### Activate test mode
+
+To enable test mode, do the following:
+
+* Login to the oxTrust GUI
+
+* Go to `Configuration` > `Organization Configuration` and choose "enabled" for the SCIM support property
+
+![enable scim](../img/scim/enable-scim.png)
+
+* Navigate to `Configuration` > `JSON Configuration` > `OxTrust Configuration`, then scroll down and set the `scimTestMode` property to true.
+
+* Click the Save Configuration button at the bottom.
+
+You can verify the current authentication scheme by querying the `ServiceProviderConfig` endpoint:
+
+![image](../img/scim/scim-test-mode-config.png)
+
+To exit test mode, just set `scimTestMode` back to `false` and then click the `Save Configuration` button.
+ 
+
+### Create an OpenId client
+
+In this step we will create an OpenId Connect client that will allow us to request valid access tokens to interact with the service.
+
+Basically, there are two ways of creating a client. One consists of issuing a HTTP POST with some Json content payload to the already existing client registration endpoint of your Gluu Server and parsing the received response. Another, more end-user oriented is via oxTrust.
+
+If you love coding and have enough time you can take the first approach (interacting with the client registration endpoint). You can locate the endpoint URL by visiting `https://<your-gluu-host>/.well-known/openid-configuration` and locating the property `registration_endpoint`. To know what values you may have to pass in Json content please refer to section 3 of the OpenID Connect [Dynamic Client Registration 1.0 spec](http://openid.net/specs/openid-connect-registration-1_0.html).
+
+The more pleasant second alternative is using the Gluu server administration web interface. Just follow the steps:
+
+* Login to `https://<your-gluu-host>/identity` using your admin credentials
+
+* Go to `OpenId connect` > `Clients` and click the **Add client** button
+
+* Fill out the form using the following values. As you will see most default values are OK:
+
+  * Client Name: SCIM-Client. You may enter a different name
+  * Client secret: Think of it as a password. Choose something safe but comfortable for your testing exercise 
+  * Application type: Native
+  * Persist Client Authorizations: true
+  * Subject type: pairwise
+  * Authentication method for the Token Endpoint: client_secret_basic
+  * Require Auth Time: false
+  * Logout Session Required: false
+  * Include Claims In Id Token: false
+  * Client Secret Expires: Choose a future date (one week ahead is fine)
+
+* Scroll down to the bottom of the page and click the "Add Scope" button, type openid in the text field, and press search. Select the row whose "display name" is **openid**, and click OK
+
+* Repeat the previous step to add the **permission** scope
+
+* Click the "Add Response Types" button. In the list choose **token** and click OK
+
+* Click the "Add Grant Type" button, then select **client_credentials**
+
+* At the bottom press the "Add" button to finish creating your OpenId client.
+
+### Request an access token to token endpoint
+
+!!! Note: This section requires basic knowledge of HTTP at programming or scripting (eg. bash) level.
+
+The **client_credentials** grant chosen in the previous step allows us to obtain a token very easily: we just need to make a POST to the token endpoint of the authorization server (Gluu server) passing the recently-created client credentials. Just do the following:
+
+* Locate the token endpoint of Gluu server: visit `https://<your-gluu-host>/.well-known/openid-configuration` and search the property labeled **token_endpoint**
+
+* Create a text string to encode the credentials of your client. Here you have an algorithm to do so:
+
+  * Let authUsername be the name of the client
+  * Let authPassword be the client secret
+  * Create a new string concatenating `authUsername`, the colon (:) character, and `authPassword` in that exact order
+  * Obtain the underlying array of bytes for the string created. Use *utf-8* if you need to supply an encoding to transform the string to bytes
+  * Create a base64-encoded string representation of the array of bytes (most programming languages feature this functionality out of the box)
+  * Create a new string concatenating the word "Basic" (do not include quotes), a space, and the string created in previous step. This is the resulting encoded credentials 
+  
+* Submit a HTTPs POST to the token endpoint using the following data:
+
+  * Authorization header. As value use the encoded credentials
+  * Content-Type header. As value use *application/x-www-form-urlencoded*
+  * grant_type parameter. Use *client_credentials* 
+
+Here is an example:
 ```
+     POST /oxauth/restv1/token HTTP/1.1
+     Host: your.host.com
+     Authorization: Basic czZCaGRSa3F0MzpnWDFmQmF0M2JW
+     Content-Type: application/x-www-form-urlencoded
+
+     grant_type=client_credentials
+```
+
+In `curl` jargon, you may issue a command like this to achieve the same effect:
+
+```
+$ curl -H 'Content-Type: application/x-www-form-urlencoded' -H 'Authorization: Basic ...' 
+       -d grant_type=client_credentials https://<host-name>/oxauth/restv1/token
+```
+
+If you have problems creating your request, see section 4.4.2 of [OAuth 2.0](http://tools.ietf.org/html/rfc6749) for a deeper insight.
+
+### Extract token from response
+
+Once the POST is executed you will get a response from server in Json format. Validate you are receiving a successful response (HTTP code 200). If something went wrong (malformed request), you will see a bad request error (HTTP code 400).
+
+The following is an example of a successful response:
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json;charset=UTF-8
+Cache-Control: no-store
+Pragma: no-cache
+
 {
-	"ldap_settings":{
-		"ox-ldap_location": "/etc/gluu/conf/ox-ldap.properties",	//Location of ox-ldap.properties file
-		"salt" : "/etc/gluu/conf/salt", //Optional. location of salt properties file
-		"applianceInum": "@!...",
-		"orgInum": "@!..."
-	},
-	"enable_pass_reset": true,	//optional
-	"oxd_config": { "host": "localhost", "port": 8099, "oxd-id": "...", "authz_redirect_uri" : "..." , "post_logout_uri": "..." },	//"oxd-id" is optional
-	"enabled_methods": [],		//optional
-	"u2f_settings" : {
-		"u2f_relative_uri" : "restv1/fido-u2f-configuration",	//optional. Endpoint for registration of fido devices
-		"app_id": null	//optional. The U2F app ID
-	}
+	"access_token":"2YotnFZFEjr1zCsicMWpAA",
+	"token_type":"Bearer",
+	"expires_in":3600
 }
 ```
-Unless otherwise stated, the params in the example are mandatory.
 
-You can find a sample configuration file [here](https://github.com/GluuFederation/cred-manager/blob/master/configurations/cred-manager.json). 
+From the response extract the so called **access token**.
 
-### Notes on parameters inference:
-* This app uses `ox-ldap.properties` file to lookup LDAP connection settings. Once connected to LDAP, this app will find:
-	* displayName attribute in the `o` branch to determine the organization name
-	* oxTrust's oxTrustConfCacheRefresh attribute to determine if a source backend LDAP is enabled ("sourceConfigs" property in JSON). If so, password reset won't be enabled regardless of the value of *"enable_pass_reset"*. If *"enable_pass_reset"* is not provided and there is no enabled backend LDAP detected, a default value of false is assumed.
-	* oxAuth's oxAuthConfDynamic attribute to get:
-		* the OIDC config endpoint (property "openIdConfigurationEndpoint" in JSON)
-		* the issuer attribute
-	* The entry corresponding to the OTP custom script to grab configurations needed in case OTP is recognized as an active method for 2FA. The file pointed to by the `opt_conf_file` entry is parsed as well.
-	* The entry corresponding to the SMS custom script to grab configurations needed in case SMS is used for 2FA.
-	
-* app checks Implementation-Version entry in `MANIFEST.MF` file inside `oxauth.war` to guess Gluu version it is running on
-* If *"enabled_methods"* is not present, or has empty value or null, then all supported methods will be enabled. The exact set of methods is deduced after inspecting acr_supported_values in the server. Depending on current server setup, this can lead to only password (no 2FA at all).
-* If *"oxd-id"* is not present, or has empty value or null, registration of this app with **oxd** will take place.
-* If *"u2f_relative_uri"* is not present, or has empty value or null, it will default to ".well-known/fido-u2f-configuration" for versions earlier than 3.1.0 or "restv1/fido-u2f-configuration" for version 3.1.0. The value of issuer property found in LDAP followed by a slash (/) will be prepended to this to get a correct endpoint URL for U2F devices enrolling.
-* If *"app_id"* is not present, or has empty value or null, it will default to the *issuer* value in oxAuth's oxAuthConfDynamic. Passing an *app_id* is useful for [multi-facets apps](https://developers.yubico.com/U2F/App_ID.html) where an HTTPS URL that resolves to a JSON list of facet IDs needs to be supplied.
+### Send requests to SCIM endpoints
 
-### "Hidden" properties
-These are extra properties that can be set in the JSON file to tweak certain behaviors. Mostly useful in development and testing scenarios:
-* *"gluu_version"*: This will obviate the need for inspecting `oxauth.war` to find out the version being used. Value is provided as string.
+Now you can start interacting with your service!. 
 
-## OXD Registration
+To understand the protocol, that is, the endpoints available in the service and the information those endpoints accept as input and return as output, you may like to glance at the [protocol spec](https://tools.ietf.org/html/rfc7644). However, to make it easier for you, we have compiled some representative examples of CRUD with SCIM (creation, retrieval, update and delete) in the section [Raw of HTTP requests](?? below).
 
-If *"oxd-id"* is null, empty or non-existing, cred-manager will try to execute the "register site" step with the oxd server whose host and port is already provided in *"oxd_config"*. Once an oxdId is grabbed, the app. will update the config file so that it contains this value.
+By now, let's start with a basic query: say we need to find the users whose userName contains the sequence of letters "mi". 
 
-For registration, the following are also passed: *authz_redirect_uri*, *post_logout_uri*. All other parameters will be the defaults used by oxd.
+We need to know:
 
+* The SCIM endpoint for user retrieval, which is `https://<host-name>/identity/restv1/scim/v2/Users` in Gluu Server 3.1.0
 
-## Logging
+* How to write a filter for a search. In this case is fairly easy, the filter we need is `filter=userName co "mi"` (`co` stands for *contains*). To learn more about filters see section 3.4.2.2 of [protocol spec](https://tools.ietf.org/html/rfc7644).
 
-Log4j2 framework is used and configure via a file named `log4j2.xml` located at `/WEB-INF/classes`. It uses the system property *log.base* (found in the `start.ini` file of the app's jetty base) to determine where to write logs. [Here](https://github.com/GluuFederation/cred-manager/blob/master/configurations/log4j2.xml) you will find a sample file for `log4j2.xml`.
+* How to pass the token. Since we are using a bearer token approach, we just pass in the **Authorization** header of the request the word "Bearer" followed by a single space, and followed by the access token we already have. Do not include quotes.
 
-# Installation
-
-## Requirements
-
-This application requires a working installation of Gluu Server with at least the following: Apache server, LDAP server and oxAuth server. The use of oxTrust is highly recommended.
-
-* Set the following scopes to be default: `openid`, `profile`, `user_name`, `email`, `mobile_phone`, `phone`, and `clientinfo`. This can be done with oxTrust or manually in LDAP by setting the *defaultScope* attribute to **true** for the appropriate entries under the `scopes` branch.
-  
-* Purchase an oxd [license](https://oxd.gluu.org). You will be given 4 bits of data: license ID, public Key, public password, and license password.
-
-
-## Oxd setup
-
-Grab a .zip with complete distribution file for oxd from https://ox.gluu.org/maven/org/xdi/oxd-server/. Currently, version used for cred-manager is 3.1.0-SNAPSHOT
-
-Follow the steps found at [oxd installation page](https://www.gluu.org/docs/oxd/install/#unix) to unzip and start. Take into account that license information has to be filled in `oxd-conf.json` file. Update the "op_host" property of oxd-config.json to point to your IDP, e.g. `https://mygluu.host.com`
-
-Oxd can be installed in the same server where the IDP is running.
-
-
-## Update LDAP schema
-
-TODO
-
-## Jetty base instance configuration
-
-Use these [instructions](http://www.eclipse.org/jetty/documentation/current/quickstart-running-jetty.html) as a guide.
-
-The following switch is recommended: `--add-to-start=jsp,servlets,ssl,http,deploy,https,console-capture`
-
-Create a suitable `cred-manager.json` configuration file for your case and copy it wherever you like. For instance inside `etc` directory of your new jetty  base.
-
-Edit `start.ini` inside the jetty base and add the following:
+Here is an example of our toy request. Note the usage of HTTP GET:
 
 ```
-jetty.http.port=<http-port-for-app>
--Dgluu.base=<see section [application initialization](#application-initialization)>
--Dlog.base=<e.g path-to-jetty-base>
+GET /Users?count=10&filter=userName co "mi"
+   Host: your.host.com
+   Authorization: Bearer h480djs93hd8
 ```
 
-Replace content between angle brackets accordingly.
+So with `curl` it should look like this:
 
-[Here](https://github.com/GluuFederation/cred-manager/blob/master/configurations/start.ini) it is a sample `start.ini` file.
+```
+curl -G -H 'Authorization: Bearer ...access token...' -d count=10
+      --data-urlencode 'filter=userName co "mi"' https://<host-name>/identity/restv1/scim/v2/Users
+```
 
-Make the SSL configurations required for your Jetty instance. This can be done in different ways. You can use [this](http://www.eclipse.org/jetty/documentation/current/configuring-ssl.html) as a guide.
+After execution you will get Json content with the results matching the criterion (at most 10 items). 
 
-**Note**: Running cred-manager over SSL is a requirement.
+!!! Note: Always pay attention to the HTTP response code. If you are getting 401, ie. unauthorized, your token may have expired. If that's the case proceed to the next section immediately to learn how to cope with this situation.
 
-## First run of the app
+You may consider jumping to section [Raw HTTP requests](?? below) to see more examples of how to interact with SCIM endpoints. In that section you will find more `curl` examples.
 
-Add a new custom script with name **router** and whose contents are that of file `acr_router.py` that you can find [here](https://github.com/GluuFederation/cred-manager/blob/master/configurations). Set it to level 1.
+### Obtain a new access token for subsequent requests
 
-Copy the .war file of cred-manager to the jetty base webapps directory. You can copy a exploded directory too.  Depending on previous setup, you may need to issue a command for starting the app, or if hot deployment is used (default behavior in Jetty) this is not needed. Wait a couple of minutes while the app starts. Check the log directory corresponding to `log.base` system variable to see the progress. You should see a message like "WEBAPP INITIALIZED SUCCESSFULLY" .
+An access token lifetime is around 5 minutes, so after a short period you will start getting a small Json response saying you are not authorized (HTTP 401) for all subsequent invocations made. This means it's time to request for a newer token.
 
-Do not hit the URL of the app by now. Open `cred-manager.json`: you should see a new attribute called "oxd-id" appears there. This means a new OIDC client was created for the app to use. This can be verified in oxTrust where a new client appears with the name "cred-manager".
+To do this, just do the same as in the section [above](?? above Request an access token to token endpoint) where we were issued the access token for the first time. Extract the token from the response and you can continue playing around with the SCIM API endpoints.
 
-## ACRs configuration
+!!! Note: To request an access token, the OpenId client acting on your behalf must be current: its password expiration also counts. Update your client expiration or create a new client if necessary. Just proceed as in previous steps.
 
-* Enable the custom scripts required for your particular case (this can be done by tweaking LDAP directly or via oxTrust). Ensure that settings of scripts are properly configured - it's recommended to test if they are working fine by logging into oxTrust and changing the authentication method: go to `Manage authentication` > `Default authentication method` > `oxTrust acr`. For a deeper insight, check `oxauth_script.log` of Gluu server. 
 
-* Besides the typical (e.g. OTP) you need to enable the `basic` script also - search for a script whose name is "basic". Set it to level 2.
+### Differences between current (3.1.0) and older test mode
 
-* Edit all scripts you have just enabled by changing the default page used in the `getPageForStep` method. That is, find the last line in such method (that looks like `return ""`) and replace by `return "/alter_login.xhtml"`. 
+Versions 3.0.x and earlier employed a (very) long-lived OAuth2 access token to send requests to the service. As we have seen, current Gluu server uses a safer short-lived token approach in combination with an OpenId Connect client. 
 
-* Copy the custom login pages. These will make the login flow more pleasant for users by using an *identifer-first* approach for authentication. Use the following steps as a guide for this task:
+The token used to be passed as an extra query parameter. We have changed this to using the Authorization header, which is a more standard and safer practice.
+
+If you are still interested in how the older approach worked, visit the [3.0.2 page](https://gluu.org/docs/ce/3.0.2/admin-guide/user-scim/#using-test-mode).
+
+In version 3.1 the root endpoint has been shortened: now your service is exposed at `https://<your-host>/identity/restv1/scim/v2/`.
+
+## Raw HTTP requests
+
+To lower the barrier to start with SCIM, some raw HTTP sample requests are presented in throughout this section. These requests exemplify how to do very basic CRUD on SCIM resources. While only users are being covered, you can extrapolate to groups and other kind of resources if any.
+
+If you are a Java developer, you already have at your disposal a [library](SCIM-client section below) to interact with your SCIM endpoints so there is no need to craft requests by hand.
+
+Examples shown here cover very little of what's possible to achieve with the SCIM REST API. For richer or advanced use cases, you may like to glance at the spec. The page [SCIM API](../api-guide/scim-api/#user-endpoint) offers a condensed and more amenable to read reference so that you can compose your requests with ease.
+
+
+### Requisites
+
+* To undertake this exercise test mode must be enabled: ensure you understand the steps shown in previous section and that you have a mechanism to automate the process of requesting access tokens since they are short lived. 
+* Examples will make use of `curl` so ensure it's available in your environment. Starter knowledge of `curl` is more than enough.
+* Ensure you have a text editor at hand
+* It's not required, but desirable that you can inspect your LDAP contents as you proceed with the examples. If you are not comfortable issuing Open LDAP commands, a GUI client such as [Apache DS](https://directory.apache.org/studio/downloads.html) makes a very pleasant experience.
+
+### Creating resources
+
+Let's start creating a dummy user. Open a text editor and paste the following:
+
+```
+{
+	"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+	"userName":"ajsmith",
+	"name":{
+		"familyName":"Smith",
+		"givenName":"Joe"
+	},
+	"displayName":"Average Joe"
+}
+```
+
+Save it to your local disk as `input.json` and open a command line interface (you don't need to login to Gluu's chroot). Issue this command replacing with proper values between the angle brackets:
+
+```
+$ curl -H 'Authorization: Bearer ...access token...' -H 'Content-Type: application/scim+json' -H 'cache-control: no-cache' 
+  -d @input.json -o output.json https://<host-name>/identity/restv1/scim/v2/Users`
+```
+
+If your gluu server is protected by a self-signed certificate (as in the default installation) add the following switch:
+
+`--cacert /opt/gluu-server-<glu-version>/etc/certs/httpd.crt`
+ 
+After execution open the file `output.json`. You should see a response like this (some contents have been supressed for readability):
+
+```
+{
+  "id": "...",
+  "meta": {
+    "created": "...",
+    "lastModified": "...",
+    "location": "https://.../scim/v2/Users/@!..."
+    "resourceType": "User"
+  },
+  "schemas": [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+  "userName": "ajsmith",
+  "name": {
+    "formatted": "Joe Smith",
+    "familyName": "Smith",
+    "givenName": "Joe"
+  },
+  "displayName": "Average Joe",
+  ...
+}
+```
+
+This new user has been given an `id`. If possible, inspect your `ou=people` branch and find the entry whose `inum` matches the `id` given. An easier option would be to login via oxTrust and go to `Users` > `Manage People` and search "Joe" to see the recently created user.
+
+SCIM will only allow you to create users with HTTP POST verb.
+
+### Retrieving information of a user
+
+One of the simplest ways to test retrieval is querying all information about a single user. Check in your LDAP the `inum` for Average Joe and do the following request with `curl` passing, as usual, your access token in the headers:
+
+`https://<host-name>/identity/seam/resource/restv1/scim/v2/Users/<user-inum>`
+
+!!! Note:
+    In the Gluu Server, `inums` are long strings consisting of alphanumeric characters and typically start with @!, include these two characters as well...
+
+As a response, you will get a JSON document with all of the attributes in the user schema and their corresponding values. For Joe, almost all of them will have a *null* or an empty array as value, as in the following:
+
+```
+{
+  "id": ...,
+  "externalId": null,
+  "meta": {...},
+  "schemas": [...],
+  "userName": "ajsmith",
+  "name": {
+    "formatted": "Joe Smith",
+    "familyName": "Smith",
+    "givenName": "Joe",
+    ...
+  },
+  "displayName": "Average Joe",
+  ...
+  "locale": null,
+  ...
+  "emails": [],
+  ...
+  "phoneNumbers": [],
+  ...
+  "addresses": []
+  ...
+}
+```
+
+### Retrieval with filtering
+
+The SCIM protocol defines a standard set of parameters that can be used to filter, sort, and paginate resources in a query response (see section 3.4.3 of [RFC 7644](https://tools.ietf.org/html/rfc7644)). Filtering capabilities are very rich and enable developers to build complex queries.
+
+We will elaborate a bit more on the example shown in the (test mode section)[?? above]: let's create a query to return the first 2 users whose `userName` contains the sequence of letters "mi". Results should be sorted alphabetically by `givenName`.
+
+```
+$ curl -G -H 'Authorization: Bearer ...access token...'  -o output.json 
+      --data-urlencode 'filter=userName co "mi"' 
+      -d startIndex=1 -d count=2 -d sortBy=name.givenName
+      https://<host-name>/identity/restv1/scim/v2/Users
+```
+
+As response you will have a JSON file that looks like this:
+
+```
+{
+	"totalResults": 2,
+	"itemsPerPage": 2,
+	"startIndex": 1,
+	...
+	"Resources": [
+		{
+		...
+		attributes of first user matching criteria
+  		..
+  		},
+		{
+		...
+		attributes of second user matching criteria
+  		..
+  		}
+  	]
+}
+```
+
+
+### Updating a user
+
+!!! Note
+    SCIM spec defines two ways to update resources: HTTP PUT and PATCH. Current Gluu implementation only supports PUT (PATCH being scheduled for a future release).
+
+Overwrite your `input.json` with the following. Replace content in angle brackets accordingly:
+
+```
+{
+	"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+	"id": <joe's-inum>,
+	"userName":"ajsmith",
+	"name":{
+		"familyName":"Smith",
+		"givenName":"Joe"
+	},
+	"displayName":"Joe Smith",
+	"emails": [{
+		"value": "jsmith@foodstuffs.eat",
+		"type": "work",
+		"primary": "true"
+	}]	
+}
+```
+
+And issue the PUT with `curl`:
+
+```
+$ curl -X PUT -H 'Authorization: Bearer ...access token...' 
+       -H 'Content-Type: application/scim+json' -H 'cache-control: no-cache' 
+       -d @input.json -o output.json 
+       'https://<host-name>/identity/restv1/scim/v2/Users/<user-inum>'
+```
+
+!!! Note
+    Surround the URL with single quotes: `inum`s contain bang characters that might be misleading to your command line interpreter.
+
+Response (`output.json`) will show the same contents of a full retrieval.
+
+Please verify changes were applied whether by inspecting LDAP or issuing a GET. If you have followed the steps properly, you should notice a new e-mail added and the change in `displayName` attribute.
+
+### Deleting users
+
+For deleting, the DELETE method of HTTP is used.
+
+No input file is used in this case. A delete request could be the following:
+
+```
+$ curl -X DELETE -H 'Authorization: Bearer ...access token...' -H 'cache-control: no-cache' 
+        'https://<host-name>/identity/seam/resource/restv1/scim/v2/Users/<user-inum>'
+```
+
+Use the `inum` of our dummy user, Average Joe.
+
+Note in LDAP or by using oxTrust the absence of Joe.
+
+
+## Testing with the SCIM-Client
+
+If you code in Java, you can take advantage of the ready-to-use client library [SCIM-Client](https://github.com/GluuFederation/SCIM-Client) developed by Gluu. With this client, you will be able to interact with your SCIM endpoints with no need to craft requests by hand, creating clients or requesting/refreshing access tokens. You can even use the client when your endpoints are protected by UMA: all authorization steps are handled for you.
+
+### Requisites
+
+* Entry-level knowledge of Java is enough. Make sure you have Java Standard Edition installed. The use of maven as build tool is recommended
+* Ensure you have enabled SCIM and test mode as shown [above](?? above Activate test mode).
+* Add the SSL certificate of your Gluu server to the `cacerts` keystore of your local Java installation. There are lots of articles around the Web on how to import a certificate to the keystore. An utility called [Key Store Explorer](http://keystore-explorer.sourceforge.net) makes this task super-easy. If you are using a self-signed certificate, you can find it at `/opt/gluu-server-<gluu-version>/etc/certs/httpd.crt`
+* Online Java-docs for SCIM-Client are available [here](https://ox.gluu.org/scim-javadocs/apidocs/index.html). You can generate java-docs locally too using maven; just run `mvn javadoc:javadoc`
+
+### Start a simple project
+
+Create a project in your favorite IDE, and if using maven add the following snippet to your pom.xml file:
+
+```
+<properties>
+	<scim.client.version>3.1.0</scim.client.version>
+</properties>
+...
+<repositories>
+  <repository>
+    <id>gluu</id>
+    <name>Gluu repository</name>
+    <url>http://ox.gluu.org/maven</url>
+  </repository>
+</repositories>
+...
+<dependency>
+  <groupId>gluu.scim.client</groupId>
+  <artifactId>SCIM-Client</artifactId>
+  <version>${scim.client.version}</version>
+</dependency>
+```
+
+From version 3.1.0 onwards, the SCIM-Client you use should match your Gluu version. For example, if you are running Gluu Server CE v3.1.0, you must also use SCIM-Client v3.1.0.
+
+If you don't want to use Maven, you can download the jar file for SCIM-Client here: [https://ox.gluu.org/maven/gluu/scim/client/SCIM-Client](https://ox.gluu.org/maven/gluu/scim/client/SCIM-Client). This may require you to add other libraries (jar files dependencies) manually.
+
+### Simple retrieval
+
+Create a Java class using the code shown below. Replace with proper values between the angle brackets for private attributes:
+
+```
+import gluu.scim2.client.factory.ScimClientFactory;
+import org.gluu.oxtrust.model.scim2.*
+import org.jboss.resteasy.client.core.BaseClientResponse;
+import java.util.List;
+
+public class TestScimClient {
+
+    private String domainURL="https://<host-name>/identity/restv1";
+    private String OIDCMetadataUrl="https://<host-name>/.well-known/openid-configuration";
+
+    private void simpleSearch() throws Exception {
+
+        ScimClient client = ScimClientFactory.getTestClient(domainURL, OIDCMetadataUrl);
+        String filter = "userName eq \"admin\"";
+
+        BaseClientResponse<ListResponse> response = client.searchUsers(filter, 1, 1, "", "", null);
+        List<Resource> results=response.getEntity().getResources();
+
+        System.out.println("Length of results list is: " + results.size());
+        User admin=(User) results.get(0);
+        System.out.println("First user in the list is: " + admin.getDisplayName());
+
+    }
+
+}
+```
+
+The first line of method `simpleSearch` is getting an object that conforms to the `ScimClient` interface. This interface consists of a number of methods that will allow you to do all CRUD (create, retrieve, update, delete) you may need.
+
+Create a main method for class `TestScimClient` and call `simpleSearch` from there. When running you will see the output of retrieving one user (admin) and see his `displayName` on the screen.
+
+The [SCIM protected by UMA section](?? below) contains examples for [adding](?? #adding-a-user) and [deleting](?? #delete-a-user) users.  The only actual difference in coding for test mode or UMA-protected service is the way in which you initially get a `ScimClient` object instance. For test mode, just call `ScimClientFactory.getTestClient` as shown in the previous example.
+
+### Under the hood
+
+When running the code, in LDAP you will see one or more new entries under the clients branch (`ou=clients`). Those are new OpenId clients created by the Java client and they are employed to request short-lived tokens to access the service.
+In oxTrust, you can see them easily too: navigate to `OpenId Connect` > `Clients` and notice the column `Display Name`; they are named as "SCIM-Client". 
+
+These clients won't clutter your LDAP, they are also short-lived (one day) so they are cleaned up automatically for you.
+
+## SCIM protected by UMA
+
+User-managed access (UMA) is a profile of [OAuth2.0](http://tools.ietf.org/html/rfc6749) and is focused on defining standardized flows and constructs for coordinating the protection of an API or existing web resource. 
+
+For more information on UMA please visit the corresponding [page](uma.md) in the docs - the specification can be found at [kantara website](https://docs.kantarainitiative.org/uma/rec-uma-core-v1_0_1.html).
+
+Gluu Server CE supports UMA protection for SCIM endpoints from version 2.4.0 onwards. This functionality is built-in and does not require any special package or installation. 
+
+!!! Note
+    Gluu server 3.1.0 supports UMA 2.0 - the latest version of the standard. UMA 1.0.1 is not supported anylonger.
+
+### Actors involved in protection
+
+This section condenses some important aspects to be aware of when protecting your SCIM API by UMA. For instance, it's important to familiarize yourself with the different parties interacting in the process, namely a resource owner, a client, a resource server, and an authorization server.
+
+* For the case of SCIM, the "resource" is what we are intended to protect, i.e. our database of users and groups stored in LDAP. More exactly we are interested in protecting the set of URLs that expose our data, in other words, the so-called "SCIM endpoint" - something that looks like this: `http://<your_host>/identity/restv1/scim/v2/`.
+
+* The resource owner is normally a legal entity (e.g. your company), or someone acting on its behalf (the administrator of Gluu CE installation). The owner should be capable of granting access to protected resources.
+
+* Requesting party is generally an end-user that seeks access to a protected resource. Only in certain use cases the requesting party and resource owner are the same person. To achieve the task, the requesting party uses a client.
+
+* The client is usually an application capable of making requests for protected resources on the requesting party's behalf. A good example is the [SCIM-client](https://github.com/GluuFederation/SCIM-Client).
+
+* The resource server hosts the resources to be protected, and thus is capable of dealing with requests for them. We can think of oxTrust as the resource server (at least as a front-end resource server because users and groups are not hosted per se by oxTrust though it has functionalities to able to access and modify data stored in LDAP)
+
+* The authorization server is where real protection takes place. This server issues authorization data according to policies of protection set by the resource owner. In this scenario, it maps directly to oxAuth.
+
+Now you may have a richer perspective of what the protection process entails, so let's proceed with a real setup.
+
+### Enable protection
+
+To make your SCIM endpoint be protected by UMA, you just have to activate a couple of features via oxTrust. Most complexity is hidden by configurations already setup in your default server installation. The [setup script](../installation-guide/setup_py.md) does a lot so that you can start quickly!
+
+* If you haven't done so, enable SCIM from the oxTrust admin GUI. Simply Go to `Configuration` > `Organization Configuration` and choose "enabled" for the SCIM support attribute
+
+![enable scim](../img/scim/enable-scim.png)
+
+* Activate UMA custom script in oxTrust admin GUI: Go to `Configuration` > `Manage Custom Scripts`, and in the tab for `UMA Authorization policies` check "Enabled" at the bottom. Finally press the "Update" button.
+
+![enable uma](../img/scim/enable_uma.png)
+
+In the following section we will go for a deeper insight and see how configurations correlate to concepts already shown.
+
+### Testing with the SCIM-Client
+
+The following instructions show how to interact with the UMA-protected SCIM service using the [SCIM-Client](https://github.com/GluuFederation/SCIM-Client) Java library.
+
+#### Requisites
+
+* In the following we will use Java as programming language. Entry-level knowledge is enough. Make sure you have Java Standard Edition installed. The use of maven as build tool is recommended
+
+* Copy the requesting party JKS file to your local machine (inside Gluu Server chroot it is located at `/install/community-edition-setup/output/scim-rp.jks`)
+
+* Have the requesting party client ID and password at hand. You can find this info in the file `/install/community-edition-setup/setup.properties.last`. So try run `cat setup.properties.last | grep "scim_rp_client"`. Default password is *secret*
+
+* Ensure you have enabled SCIM and UMA as shown [above](#enable-protection)
+
+* Add the SSL certificate of your Gluu server to the `cacerts` keystore of your local Java installation. There are lots of articles around the Web on how to import a certificate to the keystore. An utility called [Key Store Explorer](http://keystore-explorer.sourceforge.net) makes this task super-easy. If you are using a self-signed certificate, you can find it at `/opt/gluu-server-<gluu-version>/etc/certs/httpd.crt`
+
+* Online Java-docs for SCIM-Client are available [here](https://ox.gluu.org/scim-javadocs/apidocs/index.html). You can generate java-docs locally using maven; just run `mvn javadoc:javadoc`
+
+#### Start a simple project
+
+Create a project in your favorite IDE, and if using maven add the following snippet to your pom.xml file:
+
+```
+<properties>
+	<scim.client.version>3.1.0</scim.client.version>
+</properties>
+...
+<repositories>
+  <repository>
+    <id>gluu</id>
+    <name>Gluu repository</name>
+    <url>http://ox.gluu.org/maven</url>
+  </repository>
+</repositories>
+...
+<dependency>
+  <groupId>gluu.scim.client</groupId>
+  <artifactId>SCIM-Client</artifactId>
+  <version>${scim.client.version}</version>
+</dependency>
+```
+
+From version 3.1.0 onwards, the SCIM-Client you use should match your Gluu version. For example, if you are running Gluu Server CE v3.1.0, you must use SCIM-Client v3.1.0.
+
+If you don't want to use Maven, you can download the jar file for SCIM-Client here: [https://ox.gluu.org/maven/gluu/scim/client/SCIM-Client](https://ox.gluu.org/maven/gluu/scim/client/SCIM-Client). This may require you to add other libraries (jar files dependencies) manually.
+
+#### Simple retrieval
+
+Create a Java class using the code shown below. Replace with proper values between the angle brackets for private attributes:
+
+```
+import gluu.scim2.client.factory.ScimClientFactory;
+import org.gluu.oxtrust.model.scim2.*
+import org.jboss.resteasy.client.core.BaseClientResponse;
+import java.util.List;
+
+public class TestScimClient {
+
+    private String domain = "https://<host-name>/identity/seam/resource/restv1";
+    private String umaMetaDataUrl = "https://<host-name>/.well-known/uma-configuration";
+    private String umaAatClientId = "<requesting-party-client-id>";
+    private String umaAatClientJksPath = "<path-to-RP-jks>/scim-rp.jks";
+    private String umaAatClientJksPassword = "<jks-password>";
+    private String umaAatClientKeyId = "";
+
+    private static void simpleSearch() throws Exception {
+
+        ScimClient client = ScimClientFactory.getClient(domain, umaMetaDataUrl, umaAatClientId, umaAatClientJksPath, umaAatClientJksPassword, umaAatClientKeyId);
+        String filter = "userName eq \"admin\"";
+
+        BaseClientResponse<ListResponse> response = client.searchUsers(filter, 1, 1, "", "", null);
+        List<Resource> results=response.getEntity().getResources();
+
+        System.out.println("Length of results list is: " + results.size());
+        User admin=(User) results.get(0);
+        System.out.println("First user in the list is: " + admin.getDisplayName());
+
+    }
+}
+```
+
+You can suply an alias from `scim-rp.jks` for `umaClientKeyId`. The first key from the file is used automatically when this value is left empty.
+
+Create a main method for class `TestScimClient` and call `simpleSearch` from there. When running you will see the output of retrieving one user (admin) and see his `displayName` on the screen.
+
+#### Adding a user
+
+##### Required Parameters
+
+|Parameter|Description|
+|---------|-----------|
+|userName | The intended username for the end-user|
+|givenName| The first name of the end-user|
+|familyName| The last name of the end-user|
+|displayName| The name of the user, suitable for display to end-users|
+|_groups_| Optional parameter if the user is added to any specific group|
+
+There are two ways to add users:
+
+1. [JSON String](#json-string)
+2. [User Object](#user-object)
+
+
+##### JSON String
+
+A user can be added by supplying a JSON string representation with appropriate attributes. The following is an example of such a JSON written to a `properties` file:
+
+```
+json_string = {	\
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],	\
+  "externalId": "12345",	\
+  "userName": "newUser",	\
+  "name": { "givenName": "json", "familyName": "json", "middleName": "N/A", "honorificPrefix": "", "honorificSuffix": ""},	\
+  "displayName": "json json",	\
+  "nickName": "json",	\
+  "profileUrl": "http://www.gluu.org/",	\
+  "emails": [	\
+    {"value": "json@gluu.org", "type": "work", "primary": "true"},	\
+    {"value": "json2@gluu.org", "type": "home", "primary": "false"}	\
+  ],	\
+  "addresses": [{"type": "work", "streetAddress": "621 East 6th Street Suite 200", "locality": "Austin", "region": "TX", "postalCode": "78701", "country": "US", "formatted": "621 East 6th Street Suite 200  Austin , TX 78701 US", "primary": "true"}],	\
+  "phoneNumbers": [{"value": "646-345-2346", "type": "work"}],	\
+  "ims": [{"value": "test_user", "type": "Skype"}],	\
+  "userType": "CEO",	\
+  "title": "CEO",	\
+  "preferredLanguage": "en-us",	\
+  "locale": "en_US",	\
+  "active": "true",	\
+  "password": "secret",	\
+  "roles": [{"value": "Owner"}],	\
+  "entitlements": [{"value": "full access"}],	\
+  "x509Certificates": [{"value": "cert-12345"}]	\
+}
+```
+
+Here, backslashes "\\" allow us to span the contents in several lines.
+
+Assuming you named the file as `scim-client.properties`, the following Java code will create the new user:
+
+```
+Properties p= new Properties();
+p.load(new FileInputStream("scim-client.properties"));
+ScimResponse response = scim2Client.createPersonString(p.getProperty("json_string"), MediaType.APPLICATION_JSON);
+```
+
+##### User Object
+
+You may also use an "*objectual*" approach to dealing with users. The following code snippet employs the class `org.gluu.oxtrust.model.scim2.User` of SCIM-Client.
+
+```
+User user = new User();
+
+Name name = new Name();
+name.setGivenName("Given Name");
+name.setFamilyName("Family Name");
+user.setName(name);
+
+user.setActive(true);
+
+user.setUserName("newUser_" +  + new Date().getTime());
+user.setPassword("secret");
+user.setPreferredLanguage("US_en");
+
+List<Email> emails = new ArrayList<Email>();
+Email email = new Email();
+email.setPrimary(true);
+email.setValue("a@b.com");
+email.setDisplay("a@b.com");
+email.setType(Email.Type.WORK);
+email.setReference("");
+emails.add(email);
+user.setEmails(emails);
+
+List<PhoneNumber> phoneNumbers = new ArrayList<PhoneNumber>();
+PhoneNumber phoneNumber = new PhoneNumber();
+phoneNumber.setPrimary(true);
+phoneNumber.setValue("123-456-7890");
+phoneNumber.setDisplay("123-456-7890");
+phoneNumber.setType(PhoneNumber.Type.WORK);
+phoneNumber.setReference("");
+phoneNumbers.add(phoneNumber);
+user.setPhoneNumbers(phoneNumbers);
+
+List<Address> addresses = new ArrayList<Address>();
+Address address = new Address();
+address.setPrimary(true);
+address.setValue("test");
+address.setDisplay("My Address");
+address.setType(Address.Type.WORK);
+address.setReference("");
+address.setStreetAddress("My Street");
+address.setLocality("My Locality");
+address.setPostalCode("12345");
+address.setRegion("My Region");
+address.setCountry("My Country");
+address.setFormatted("My Formatted Address");
+addresses.add(address);
+user.setAddresses(addresses);
+
+ScimResponse response = scim2Client.createUser(user, new String[]{});
+System.out.println("response HTTP code = " + response.getStatusCode());
+System.out.println("response body = " + response.getResponseBodyString());
+```
+
+#### Delete a user
+
+To delete a user only his id (the `inum` LDAP attribute) is needed. You can see the `id` of the user just created by inspecting the JSON response.
+
+```
+BaseClientResponse<User>response=client.deletePerson(id);
+assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
+```
+
+### Using a different programming language 
+
+Coding service interactions when SCIM endpoints are being protected by UMA is more involved than using test mode. If you are planning to code for a SCIM service protected by UMA, it is advisable to check the flow depicted in section 3 of the [UMA 2.0 spec](https://docs.kantarainitiative.org/uma/ed/oauth-uma-grant-2.0-04.html). Focus only on the interactions of client vs. another party (resource server or authorization server). In a previous (section)[?? above Actors involved in protection] we have talked about the actors involved in UMA protection; this will save you time when reading the specification.
+
+As a guideline for your own implementation, you can take ideas from the Java class (UmaScimClient)[https://github.com/GluuFederation/SCIM-Client/blob/version_3.1.0/src/main/java/gluu/scim2/client/UmaScimClient.java#L74] found in SCIM-Client. Starting  at the `authorize` method, you will see how steps in the spec flow are being followed there.
+
+Check the metadata URL of UMA 2 to discover the oxAuth endpoint that issues tokens. Visit `https://<host-name>/.well-known/uma2-configuration`.
+
+## Creating your own attributes by using extensions
+
+[RFC 7643](https://tools.ietf.org/html/rfc7643) defines the schema for resource types in SCIM. In other words, defines structures in terms of attributes to represent users and groups as well as attribute types, mutability, cardinality, and so on. 
+
+Despite schema covers to a good extent many attributes one might thing of, at times you will need to add your own attributes for specific needs. This is where user extensions pitch in, they allow you to create custom attributes for SCIM. To do so, you will have to:
+
+* Add an attribute to LDAP schema
+* Include the new attribute into an LDAP's objectclass such as gluuPerson or preferably, gluuCustomPerson
+* Register and activate your new attribute through oxTrust GUI
+
+Please visit this [page](attribute.md#custom-attributes) for a more detailed explanation. When registering the attribute in the admin GUI, please ensure you have set the `SCIM Attribute` parameter to `true`.
+
+![image](../img/admin-guide/user/scim-attribute.png)
+
+Once you submit this form, your attribute will be part of the User Extension. You can verify this by inspecting the `Schema` endpoint:
+
+`https://<host-name>/identity/restv1/scim/v2/Schemas/urn:ietf:params:scim:schemas:extension:gluu:2.0:User`
+
+![image](../img/admin-guide/user/scim-custom-first.png)
+
+In the JSON response, your new added attribute will appear.
+
+You can learn more about SCIM Schema and the extension model by reading [RFC 7643](https://tools.ietf.org/html/rfc7643). Also refer to the following unit tests in SCIM-Client project for code examples in which custom attributes are involved:
+
+* [User Extensions Object Test](https://github.com/GluuFederation/SCIM-Client/blob/version_3.1.0/src/test/java/gluu/scim2/client/UserExtensionsObjectTest.java)
+* [User Extensions JSON Test](https://github.com/GluuFederation/SCIM-Client/blob/version_3.1.0/src/test/java/gluu/scim2/client/UserExtensionsJsonTest.java)
+
+## Additional features of SCIM service
+
+SCIM standard is concerned with two classes of resources, namely, Users and groups. However, according to spec, the service can be extended to add new resource types. Particularly, Gluu Server implementation of SCIM contains a resource type called "Fido device". 
+
+### Fido devices
+
+A fido device represents a user credential stored in the Gluu Server LDAP that is compliant with the [FIDO](https://fidoalliance.org) standards. These devices are used as a second factor in a setting of strong authentication. Examples of fido devices are (u2f security keys)[https://gluu.org/docs/ce/3.1.0/authn-guide/U2F/] and (Super Gluu devices)[https://gluu.org/docs/ce/3.1.0/authn-guide/supergluu/].
+
+Including FIDO devices as one of resource types will allow application developers querying, updating and deleting already existing (added) devices. Addition of devices do not take place through the service since this process requires direct end-user interaction, ie. device enrolling.
+
+The following is a summary of features of a Fido Device SCIM resource:
+
+* Schema urn: `urn:ietf:params:scim:schemas:core:2.0:FidoDevice`
+* Name of resource: FidoDevice
+* Endpoint URL (relative to base URL of service): `/scim/v2/FidoDevices`
+* Device attributes: Attributes pertaining to this resource type are listed by visiting the URL `https://<host-name>/identity/restv1/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:FidoDevice`. 
+
+Currently the service supports only:
+* Devices search and retrieval (via GET and POST)
+* Single device update via PUT
+* Single device deletion via DELETE
+
+The following sub-section shows an example of fido device retrieval using filters.
+
+### Example: querying enrolled Super Gluu devices
+Say we are interested in having a list of supergluu devices users have enrolled and whose operating system is **iOS**. In a setting of test mode, we may issue a query like this:
+
+```
+curl -G -H 'Authorization: Bearer ...access token...' --data-urlencode 'filter=deviceData co "ios"' -d count=10 -o output.json https://<host-name>/identity/seam/resource/restv1/scim/v2/FidoDevices/
+```
+
+Your result list might look like:
+
+```
+{
+  "totalResults": ...,
+  "itemsPerPage": ...,
+  "startIndex": 1,
+  "schemas": [
+    "urn:ietf:params:scim:api:messages:2.0:ListResponse"
+  ],
+  "Resources": [
+    {
+      "id": "...",
+      "meta": {...},
+      "schemas": ["urn:ietf:params:scim:schemas:core:2.0:FidoDevice"],
+      "userId": "...",
+      ...
+      "deviceData": "{\"uuid\":\"ABC123\", \"type\":\"iPhone\", \"platform\":\"ios\", \"name\":\"Someone's iPhone\", \"os_name\":\"iOS\", \"os_version\":\"10.0.1\"}",
+      "displayName": ...,
+    }
+  ]
+}
+``` 
+
+## Supporting a user registration process with SCIM
+
+SCIM service has many use cases. One interesting and often arising is that of coding your own user registration process. With your SCIM endpoints you can build a custom application to enter users to your LDAP directory.
+
+So far in this guide, we have already touched upon the fundamentals of SCIM in Gluu Server and shown a good amount of sample requests for manipulation of user information: creating, retrieving, updating, and deleting. However, the SCIM spec documents are definitely the key reference to build working request messages, specially [RFC 7643](https://tools.ietf.org/html/rfc7643), and [RFC 7644](https://tools.ietf.org/html/rfc7644).
+
+### Important considerations before starting
+
+Here you have some useful tips before you start:
+
+1. Choose a toolset you feel comfortable to work with. Keep in mind that you have to leverage the capabilities of your language/framework to issue complex HTTP**s** requests. Be sure that:
+  * You will be able to use at least the following verbs: GET, POST, PUT, and DELETE
+  * You can send headers in your requests as well as reading them from the service response
   
-  1. Still being logged inside chroot run the following:
-  `# service oxauth stop`
-  
-  2. Copy the files `credmgr_login.xhtml`, `alter_login.page.xml` (if exists), and `alter_login.xhtml` found at [https://github.com/GluuFederation/cred-manager/blob/master/configurations](https://github.com/GluuFederation/cred-manager/blob/master/configurations) to the following location: `/opt/gluu/jetty/oxauth/custom/pages`. Use the version of files matching your Gluu server.
-  
-  3. Start oxauth:
-  `# service oxauth start`
-  
-  4. Wait a couple of minutes and check the contents of `oxauth_script.log` (found at `/opt/gluu/jetty/oxauth/logs`). You should not see errors there but only successful initialization messages.
+2. If not supported natively, choose a library to facilitate Json content manipulation. As you have already noticed we have been dealing with Json for requests as well as for responses. Experience shows that being able to map from objects (or data structures) of your language to Json and viceversa helps saving hours of coding
 
-* Double check your Gluu server has proper values for *acr_values_supported* in the OIDC metadata document and adjust `cred-manager.json` if you wish to restrict certain types of credentials. Do not provide "enabled_methods" if you just want to be able to use all credentials supported (currently limited to OTP device, verified mobile phone, U2F key, and super gluu device only).
+3. Shape your data model early. List the attributes your application will operate upon and correlate with those found in the SCIM user schema. You can learn about the schema in [RFC 7644](https://tools.ietf.org/html/rfc7644). At least, take a look at the Json formatted schema that your Gluu Server shows: visit `https://<host-name>/identity/restv1/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User`.
 
-* Once all configurations are applied, you will have to restart the application.
+4. You will have to check your LDAP contents very often as you develop and run tests. You may have to delete attributes or whole entries as your application evolves. Thus, use a suitable tool for LDAP manipulation: Use oxTrust to manipulate your users' attributes or setup a LDAP GUI client to have more control.
 
-Check the [troubleshooting guide](#troubleshooting) for more information.
+5. Always check your logs. In (test mode)[?? above] section above you can find some guidelines in this regard.
 
-# Troubleshooting
+### Summary of tasks
 
-In the following some situations that may arise and corresponding solutions are summarized.
+In this section we will summarize the tasks you need to undertake in order to code your application. We will not go into the details of any programming language or technology to build user interfaces. 
 
-**Note: check the logs**
+For coding an app or script that implements a user registration process, you should:
 
-To work properly, cred-manager requires stable dependent components (filesystem, ldap, oxd, oxauth, servlet container...). Thus, it's important to determine if all expected services are working fine. 
+* Code authorization routines
+* Code a dummy insertion routine
+* Create a form to grab new users' data
+* Code routines to process the HTTP POST
+* Create a feedback page
+* Do the adjustments in the attribute set
+* Enhance your form
 
-At startup, the app gathers a good amount of information from its environment. If something is missing or went wrong, messages will be shown in the log. Some messages may warn you about parameters not supplied that were simply inferred for you. 
+#### Code authorization routines
 
-During normal use, the app will show feedback to users if operations were successful or failed. In the latter case, the log is also worth to look at to diagnose the anomalies.
+This task has to do with creating utility code that will allow you to obtain tokens (whether an "access token" for test mode or a "requesting party token" - rpt - when using UMA). This coding requires sending HTTPs requests to a few URLs.
 
-## U2F keys enrolling not working from within cred-manager
+In previous sections we covered thoroughy what needs to be done for test mode, for UMA basic [guidelines](?? above Using a different programming language) were given. Ensure you have already enabled the protection of your preference in oxTrust.
 
-To be able to enroll u2f keys, ensure all of the following are met:
+If you are unsure of how to code a particular step, take a look at the Java client. These three classes do the job:
 
-* You are accessing the application via https (this a requirement by design of fido standard)
-* Ensure the IDP URL (*"op_host"* property of oxd-default-site-config.json) matches the same host under which cred-manager is being served. Both FQDNs should match. If you cannot have both oxAuth and cred-manager at the same host, you have to set the property *"app_id"* of cred-manager.json accordingly. For an example see "multi-facet apps" from [https://developers.yubico.com/U2F/App_ID.html](https://developers.yubico.com/U2F/App_ID.html)
-* Ensure you are using Chrome, Opera (version greater than 40), or Firefox (with the proper [u2f add-on](https://addons.mozilla.org/en-US/firefox/addon/u2f-support-add-on/) installed) and javascript enabled. These are the only browsers supporting the FIDO U2F technology. Currently cred-manager does not support adding U2F devices from mobile browsers.
-* Ensure plugging the security key before pressing the "ready" button: the enrolling process has a timeout period. Ensure you are pressing the key's button when your browser indicates to do so or when the key's button is blinking.
+* [AbstractScimClient](https://github.com/GluuFederation/SCIM-Client/blob/version_3.1.0/src/main/java/gluu/scim2/client/AbstractScimClient.java)
+* [TestModeScimClient](https://github.com/GluuFederation/SCIM-Client/blob/version_3.1.0/src/main/java/gluu/scim2/client/UmaScimClient.java)
+* [UmaScimClient](https://github.com/GluuFederation/SCIM-Client/blob/version_3.1.0/src/main/java/gluu/scim2/client/UmaScimClient.java)
 
-## The error *"incorrect email or password"* is shown when pressing the login button in the SSO form
-This reveals a problem in oxAuth, not cred-manager itself. It's highly likely to be a problem with a custom interception script (when a user is trying to use a form of strong authentication to login).
-Check if oxauth_script.log is showing an error related to the authentication method in question. If it does, check in oxTrust the parameters employed to configure the custom script are sensible. Visit https://www.gluu.org/docs/ce/, then choose your Gluu version and locate the documentation page associated to the problematic script under `Administration Guide` > `User authentication guide`.
-If you still have trouble, please use the [support forum](https://support.gluu.org) to ask for help.
+To test your authorization code, use a simple retrieval request such as the example shown (here)[?? above Retrieving information of a user].
 
-## The user interface is not showing any means to enroll credentials
+#### Code a dummy insertion routine
 
-Ensure the following are met:
+Use the information given in the section (Creating resources)[?? above Creating resources] to make a hard-coded POST to the user endpoint.
 
-* You have enabled in accordance to your needs the proper custom scripts. For instance, if you want to offer users the ability to authenticate using Google Authenticator, you have to enable the script "HOTP/TOPT authentication module"
-* You specified a correct value for *"enabled-methods"* in `cred-manager.json`. Leave it empty or null to pick all enabled methods already supported by your Gluu server.
+In summary, ascertain the following works for you:
 
-Whenever you enable or disable scripts, please wait a couple of minutes for oxAuth to pick the changes. Then you can restart cred-manager.
+```
+POST /identity/restv1/scim/v2/Users
+Host: host-name...
+Accept: application/scim+json
+Content-Type: application/scim+json
+Authorization: Bearer ...
 
-## The user interface is not showing means to enroll certain types credentials
+{
+	"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+	"userName":"ajsmith",
+	"name":{
+		"familyName":"Smith",
+		"givenName":"Joe"
+	},
+	"displayName":"Average Joe"
+}
+``` 
 
-Ensure you specified a correct value for *"enabled-methods"* in `cred-manager.json`. Leave it empty or null to pick all enabled methods already supported by your Gluu server.
+#### Create a form to grab and send new users' data
 
-## The preferred method for authentication is set to password and cannot be changed
+Design your form according to the set of attributes you are targeting. Keep it as simple as possible and do enhancements only after you are seeing progress.
 
-To choose a strong method for authentication, the user has to have enrolled at least two credentials through the app. Only after this is met, he will be able to set his preferred method
+Develop the code required to take the data entered in the fields of your form and build up a Json structure the service can understand. Ensure your code creates well-formed Json in all cases. A good amount of errors stem from the fact the payload cannot be parsed by the service implementation.
 
-## How to reset a user's preferred method of authentication
+#### Code routines to process the HTTP POST
 
-If a user has locked out for any reason (e.g. lost devices), you can reset his preferred method by deleting the `???` attribute from the user's entry in LDAP. This way, next time he/she enters, **password** will be his new preference and he won't be asked to present additional credentials.
+Take the code used for the dummy insertion and do the arrangements to be able to post an arbitary payload. Develop the required code to parse the response given by the server. It's important to be able to read:
 
-## When accessing the application I get no more than a small error message on the top left of the screen
+* The response code. Upon a successful user creation, you have to get a 201 code
+* The response header. Of particular interest is the "Location" header: it contains the URL that you can use to do a full (GET) query of the recently create resource. In our case it should look like `https://<host-name>/identity/restv1/scim/v2/Users/<new-user-inum>`
+* The response body. It contains the full user representation in Json format.
 
-This can be caused by an unathorized access attempt (e.g. users requesting URLs without ever have logged in). 
-Another source of the problem can be an interruption in the steps of authentication when second factor is used and this may cause the session to have an inconsistent state: close all browser tabs related to cred-manager and oxAuth, then clean your cookies (for instance by doing Ctrl+Shift+supr), and try accessing the (root) URL of the application again.
+While testing it's important to compare that you are receiving in the body the contents you have sent. Note that you will also receive other valuable information such as the creation timestamp.
 
-	
+#### Create a feedback page
+
+Create a success/failure page that shows the result of the operation based on the response received.
+
+#### Do the adjustments in the attribute set
+
+With your now working application, do the adjustments to include attributes that may enrich your process. A common one could be `status`. This attribute (that maps to LDAP attribute `gluuStatus`) determines whether your created user is active or not. 
+
+#### Enhance your form
+
+Polish your form and add mechanism to prevent abuse - a malicious user may end up creating lots of dummy entries -. Add validations, captchas, etc. that may control indiscriminate submissions.
+
