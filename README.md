@@ -17,13 +17,14 @@ Below is the link for the latest Gluu implementation of SCIM client:
 
 * [SCIM stable client library binary](http://ox.gluu.org/maven/gluu/scim/client/SCIM-Client/3.1.2.Final/)
 
-## How to run tests
+### How to run tests
 
 * Ensure you have a [working installation](https://gluu.org/docs/oxd/install/) of Gluu Server
 
-* Enable and then protect your SCIM API using test mode or UMA (see [API protection](https://www.gluu.org/docs/ce/user-management/scim2/#api-protection)
+* Enable and then protect your SCIM API using test mode or UMA (see [API protection](https://www.gluu.org/docs/ce/user-management/scim2/#api-protection))
 
-* Edit file `profiles/default/config-scim-test.properties` or create a profile directory with your own copy of `config-scim-test.properties`.
+* Edit `profiles/default/config-scim-test.properties` or create a profile directory with your own copy of `config-scim-test.properties`.
+  
   Supply suitable values for properties file. Use [this](https://www.gluu.org/docs/ce/user-management/scim2/#testing-with-the-scim-client-uma)
    as a guide if you are using UMA protection.
 
