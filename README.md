@@ -1,35 +1,180 @@
-SCIM-Client
-===========
+# About oxd-java-sample
 
-SCIM is a specification designed to reduce the complexity of user management operations by providing a common user schema
-and the patterns for exchanging this schema using HTTP in a platform-neutral fashion. The aim of SCIM is achieving
-interoperability, security, and scalability in the context of identity management.
+A web application that demostrates how to use oxd-java library to perform user authentication against an openID Connect provider (OP).
 
-Developers can think of SCIM merely as a REST API with endpoints exposing CRUD functionality (create, update, retrieve and delete).
+This demo app uses basic well-known technologies part of the Java EE 7 web profile. We strove for not using additional frameworks in order to facilitate the understanding of project structure as well as its code.
 
-This project consists of a ready-to-use Java client to interact with those endpoints.
+**Note**: At Gluu, we already have an oxd-java sample app that leverages the [spring framework]((https://gluu.org/docs/oxd/3.1.1/libraries/framework/spring/) that might be of your interest.
 
-Detailed specifications for SCIM can be found at [RFC 7642](https://tools.ietf.org/html/rfc7642),
-[RFC 7643](https://tools.ietf.org/html/rfc7643), and [RFC 7644](https://tools.ietf.org/html/rfc7644). Documentation of
-Gluu's implementation of SCIM service is available at [User Management with SCIM](https://www.gluu.org/docs/ce/user-management/scim2/).
+Having this application up and running is very straightforward. You don't have to go through endless list of steps for installation and configuration. Once the [prereq](#requisites) software is installed, you are almost done.
 
-Below is the link for the latest Gluu implementation of SCIM client:
+## Requisites
 
-* [SCIM stable client library binary](http://ox.gluu.org/maven/gluu/scim/client/SCIM-Client/3.1.2.Final/)
+1. Java 8+
 
-### How to run tests
+Install [Java Standard Edition](http://www.oracle.com/technetwork/java/javase/downloads/2133151) version 8 or higher.
 
-* Ensure you have a [working installation](https://gluu.org/docs/oxd/install/) of Gluu Server
+1. Maven 3+
 
-* Enable and then protect your SCIM API using test mode or UMA (see [API protection](https://www.gluu.org/docs/ce/user-management/scim2/#api-protection))
+Download [maven](https://maven.apache.org/download.cgi) and follow the simple installation instructions. Ensure the `bin` directory is added to your PATH.
 
-* Edit `profiles/default/config-scim-test.properties` or create a profile directory with your own copy of `config-scim-test.properties`.
-  
-  Supply suitable values for properties file. Use [this](https://www.gluu.org/docs/ce/user-management/scim2/#testing-with-the-scim-client-uma)
-   as a guide if you are using UMA protection.
+1. An OpenID Connect Provider (OP), like the Gluu Server
 
-* Run maven. Examples:
+Learn how to download and install Gluu server by visiting this [page](https://gluu.org/docs/ce/installation-guide/).
 
-   - `mvn test`
-   - `mvn -Dcfg=<profile-name> test`
-   - `mvn -Dtestmode=true test`
+1. oxd-server
+
+Download and install [oxd-server](https://gluu.org/docs/oxd/). For the purposes of this demo app, built-in default configuration files will work. Just ensure to fill the property **server_name** in `oxd-conf.json` as well as the license info. You can obtain a license for free at [oxd website](https://oxd.gluu.org). There is no need to "point" to the OP from your oxd in config files.
+
+If the machine where you'll execute the app is other than the one you used for installing oxd, you may have to run the [oxd https extension] as well. The extension is already bundled with oxd if you chose installing it via binary packages.
+
+## Run 
+
+You can run the app without assembling a war file or installing a servlet container. This is achieved by using the Jetty Maven Plugin, which allows users to easily run web applications.
+
+1. Ensure all required components are up and running 
+
+Double check you have your Gluu Server and oxd-server accessible.
+
+1. Clone or download the project to your local disk
+
+If you have `git` installed, just open a console and run:
+
+```
+git clone ???
+```
+
+if not, just visit [this page](???) and click the button labeled "clone or download" to download the project as a zip. Decompress the file to a destination of your choosing, then open a console and `cd` to the project's directory.
+
+1. Start the app
+
+Issue the following command:
+
+```
+mvn jetty:run
+```
+
+Depending on your connection speed and computer performance, you will have to wait a couple of minutes for the first time you run this command. It will download all required dependencies and do some configurations on your behalf.
+
+Once you see in the console a message like `... INFO:oejs.Server:main: Started @XXXms` you will know all is already set. Then open a browser and point to `https://localhost:8463/`.
+
+
+## Kill
+
+Press `Ctrl+C` on the console to stop the application.
+
+
+## What happens upon start
+
+When the app is starting, it will try to automatically interact with an available oxd-server and attempt to register a site. It does so by searching for connection parameters in local disk, Java system properties or just assuming typical default values.
+
+Site Registration is an important API operation since it supplies **"oxd-id"**, a value required to perform any operation of the API.
+
+If no site registration was possible upon start, the UI of the app will show you a warning stating that action needs to be taken and will take you to a form to complete/provide required values.
+
+Every time a Site Registration is successfully performed by means of the UI, the settings are saved to disk (in a temp directory of your OS). This way there is no need to re-enter info after subsequent restarts.
+
+## Supplying parameters to the app
+
+You can also provide specific values upon start to override the default values used when no file exists in the temporary directory. The way to supply values is by passing Java properties this way:
+
+```
+mvn -Dprop1=value1 -Dprop2=value2 ... jetty:run
+```
+
+The following table lists the set of properties you can provide:
+
+|Name|Description|Example value|
+|-|-|-|
+|oxd.server.op-host|The location of the OpenID Provider|https://my.gluu-server.com|
+|oxd.server.host|The name of host where the oxd-server is located|localhost|
+|oxd.server.port|The port of oxd-server|8080|
+|oxd.server.is-https|If present, the app will assume that server and port provided (or defaulted) are that of the https extension|Any value (even empty will work)|
+|oxd.server.acr-values|A comma-separated list of acrs that will be used in Site Registration and Get Authorization URL operations of the API|`auth_ldap_server`|
+|oxd.server.scopes|A comma-separated list of scopes supported by the OP|openid, profile|
+|oxd.sample.host|By default this app is accessible at https://localhost:8463/. With this property you can provide a different host name|my.own.box|
+|oxd.sample.port|By default this app runs on port 8463. With this property you can provide a different port|8080|
+|oxd.sample.skip-conf-file|If this property is present, the app will ignore the settings file if any|Any value (even empty will work)|
+
+The example above shows how to start the app bound to port 1234, using an oxd-https-extension located at `https://my.oxd-ext.org` and an OP located at `https://my.op-provider.com`.
+
+```
+mvn 	-Doxd.sample.skip-conf-file -Doxd.sample.port=1234 
+	-Doxd.server.is-https -Doxd.server.host=my.oxd-ext.org -Doxd.server.port=443 -Doxd.server.op-host=https://my.op-provider.com 
+	jetty:run
+```
+
+This way your application will be accessible at https://localhost:1234/. Not that `https` MUST always be used. The project files `jetty-ssl.xml`, `jetty-https.xml` and `keystore` already automate the setup in order to support SSL.
+
+## Deep diving the code
+
+This app is organized as a Maven project, so it adheres to usual maven's structure conventions.
+
+If you are interested in the logic behind project, for instance to understand how `oxd-java` library is actually being used, keep reading.
+
+The following table depicts the overall anatomy of the application:
+
+|Location|Description|
+|-|-|
+|`webapp` folder|basic UI pages (facelets) and templates|
+|`webapp/static`|css and javascript assets|
+|`webapp/oidc`|UI pages implementing a sample authentication workflow|
+|package `org.xdi.oxd.sample.listener`|Triggers the execution of upon-start logic|
+|package `org.xdi.oxd.sample.bean`|Beans that back UI pages, hold configurations, and interact with oxd-server|
+
+The last row (`org.xdi.oxd.sample.bean`) deserves a deeper look. Particularly the class `OxdService` that represents an application-scoped bean employed to issue the API calls to oxd via oxd-java library.
+
+Note how maven's `pom.xml` file lists `oxd-common` and `oxd-client` as one of the first required dependencies for the project.
+
+The public methods in `OxdService` map directly to OpenID Authorization Code flow steps. Note how every method accounts for two paths: one for standard oxd-server communication and other for oxd-https-extension.
+
+For standard (socket-based) oxd-server communication, an instance of 
+[CommandClient](https://github.com/GluuFederation/oxd/blob/version_3.1.2/oxd-client/src/main/java/org/xdi/oxd/client/CommandClient.java) is used. This instance is reused throughout all API calls. 
+
+When it comes to https, all requests are sent using a [RestEasy](http://resteasy.jboss.org/docs.html) Client via HTTP POST. Note how requests are sent accompanied by an authorization header whose value is that of an access token previously obtained by calling the Get Client Token API operation.
+
+All API calls resemble the way it's already depicted in the oxd-java [doc page](https://gluu.org/docs/oxd/libraries/languages/java/) so we are not getting into those details here. Just note that in this project most of parameters passed are obtained directly from an instance of `OxdConfig` class, which is an application-scoped bean that holds configuration data. These values are set early during application start (#what-happens-upon-start) or updated when you use the "settings" page of the application.
+
+Also worth noting is that parameters sent are always wrapped in instances whose classes belong to package [`org.xdi.oxd.common.params`](https://github.com/GluuFederation/oxd/tree/version_3.1.2/oxd-common/src/main/java/org/xdi/oxd/common/params).
+
+## Java docs
+
+In terms of size this is a tiny application but if you want to read api docs of the few classes, just issue:
+
+```
+mvn javadoc:javadoc
+```
+
+and navigate to folder `target/site/apidocs`.
+
+## FAQ
+
+### The console shows errors upon start, what's wrong?
+
+As the app attemts to do Site Registration when starting, this may lead to some stack traces shown if the operation was not successful. This is normal for the very first time you run it if you just issued `mvn jetty:run` (because there is no means to infer for instance, the URL of the OP you are trying to use). 
+
+An error trace like 
+
+```
+ERROR oxd.sample.bean.OxdService OxdService.java:73- Connection refused: connect
+...
+WARN  oxd.sample.bean.OxdService OxdService.java:76- Registration failed
+```
+
+can be ignored. Once you get to the app's home page, you will be presented with a form to supply missing values and perform Site Registration.
+
+
+### How do I deploy this app in a servlet container?
+
+The project was designed so configuration and deployment tasks were minimal through the use of Maven build tool and the Jetty Maven Plugin.
+
+If you still want to make a separate deployment in a Jetty container, you may have to create a Jetty base (use [these instructions](http://www.eclipse.org/jetty/documentation/current/quickstart-running-jetty.html) as a guide) and do [SSL](http://www.eclipse.org/jetty/documentation/current/configuring-ssl.html) configurations required.
+
+To generate your war file, you will have to use the Maven WAR plugin and do adjustments to `pom.xml` file of project. For more information see corresponding [plugin's page](https://maven.apache.org/plugins/maven-war-plugin/).
+
+Instructions on how to run the project using a different servlet container or Java application server is out of the scope of this document.
+
+
+### What to do if "Check your settings or the console output" appears in the UI
+
+Take a look a the error traces to help diagnose the problem. This is often due to connectivity problems, e.g: oxd-server is down or it cannot reach your OP. 
