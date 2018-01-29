@@ -1,180 +1,263 @@
-# About oxd-java-sample
+# Manual installation
 
-A web application that demostrates how to use oxd-java library to perform user authentication against an openID Connect provider (OP).
+This documents provides detailed instructions on how to deploy Credential Manager if you are using Gluu Server 3.0.2 or 3.1.1. If you are using 3.1.2 please follow the simpler process for this [here](installation.md).
 
-This demo app uses basic well-known technologies part of the Java EE 7 web profile. We strove for not using additional frameworks in order to facilitate the understanding of project structure as well as its code.
+## Requirements
 
-**Note**: At Gluu, we already have an oxd-java sample app that leverages the [spring framework]((https://gluu.org/docs/oxd/3.1.1/libraries/framework/spring/) that might be of your interest.
+To run this application you need:
 
-Having this application up and running is very straightforward. You don't have to go through endless list of steps for installation and configuration. Once the [prereq](#requisites) software is installed, you are almost done.
+1. A working Gluu Server installation with at least the following components installed: Apache, LDAP, oxAuth, and oxTrust.
 
-## Requisites
+2. An active [oxd](https://oxd.gluu.org) installation, version 3.1.1 or higher. See [oxd-setup below](#oxd-setup).
 
-1. Java 8+
+!!! Note
+    Credential Manager must be installed in the same host as your Gluu Server, and should ideally reside within the Gluu Server chroot container. It is **recommended** to perform all the steps inside Gluu Server chroot.
+    
+## oxd setup
 
-Install [Java Standard Edition](http://www.oracle.com/technetwork/java/javase/downloads/2133151) version 8 or higher.
+Install [oxd](https://www.gluu.org/docs/oxd/). Note that you need a [license](https://oxd.gluu.org) for it to run. You will be given 4 bits of data: license ID, public Key, public password, and license password. As stated in the docs, you have to provide license details in the `oxd-conf.json` file.
 
-1. Maven 3+
+By default oxd needs to be installed on the same server where the app to be secured is running. If you enable oxd-https-extension, oxd can be installed on a separate server with network access.
 
-Download [maven](https://maven.apache.org/download.cgi) and follow the simple installation instructions. Ensure the `bin` directory is added to your PATH.
+Double check that dynamic registration of clients is enabled in your oxauth configuration. To do so, login to oxTrust and go to `Configuration` > `Json configuration` > `oxAuth configuration`. The  **dynamicRegistrationEnabled** property must be set to true.
+  
+## Update LDAP schema
 
-1. An OpenID Connect Provider (OP), like the Gluu Server
-
-Learn how to download and install Gluu server by visiting this [page](https://gluu.org/docs/ce/installation-guide/).
-
-1. oxd-server
-
-Download and install [oxd-server](https://gluu.org/docs/oxd/). For the purposes of this demo app, built-in default configuration files will work. Just ensure to fill the property **server_name** in `oxd-conf.json` as well as the license info. You can obtain a license for free at [oxd website](https://oxd.gluu.org). There is no need to "point" to the OP from your oxd in config files.
-
-If the machine where you'll execute the app is other than the one you used for installing oxd, you may have to run the [oxd https extension] as well. The extension is already bundled with oxd if you chose installing it via binary packages.
-
-## Run 
-
-You can run the app without assembling a war file or installing a servlet container. This is achieved by using the Jetty Maven Plugin, which allows users to easily run web applications.
-
-1. Ensure all required components are up and running 
-
-Double check you have your Gluu Server and oxd-server accessible.
-
-1. Clone or download the project to your local disk
-
-If you have `git` installed, just open a console and run:
+Add the following three attributes to Gluu LDAP schema. These are needed for the application to work properly.
 
 ```
-git clone ???
-```
+attributetype ( oxAttribute:<NUMERIC-ID> NAME 'oxPreferredMethod'
+	DESC 'cred-manager - preferred method (acr) to use for user authentication'
+	EQUALITY caseIgnoreMatch
+	SUBSTR caseIgnoreSubstringsMatch
+	SYNTAX 1.3.6.1.4.1.1466.115.121.1.15
+	X-ORIGIN 'Gluu created attribute' )
+	
+attributetype ( oxAttribute:<NUMERIC-ID> NAME 'oxOTPDevices'
+	DESC 'cred-manager - Json representation of OTP devices. Complementary to oxExternalUid attribute'
+	EQUALITY caseIgnoreMatch
+	SUBSTR caseIgnoreSubstringsMatch
+	SYNTAX 1.3.6.1.4.1.1466.115.121.1.15
+	X-ORIGIN 'Gluu created attribute' )
+	
+attributetype ( oxAttribute:<NUMERIC-ID> NAME 'oxMobileDevices'
+	DESC 'cred-manager - Json representation of mobile devices. Complementary to mobile attribute'
+	EQUALITY caseIgnoreMatch
+	SUBSTR caseIgnoreSubstringsMatch
+	SYNTAX 1.3.6.1.4.1.1466.115.121.1.15
+	X-ORIGIN 'Gluu created attribute' )
+````
 
-if not, just visit [this page](???) and click the button labeled "clone or download" to download the project as a zip. Decompress the file to a destination of your choosing, then open a console and `cd` to the project's directory.
-
-1. Start the app
-
-Issue the following command:
-
-```
-mvn jetty:run
-```
-
-Depending on your connection speed and computer performance, you will have to wait a couple of minutes for the first time you run this command. It will download all required dependencies and do some configurations on your behalf.
-
-Once you see in the console a message like `... INFO:oejs.Server:main: Started @XXXms` you will know all is already set. Then open a browser and point to `https://localhost:8463/`.
-
-
-## Kill
-
-Press `Ctrl+C` on the console to stop the application.
-
-
-## What happens upon start
-
-When the app is starting, it will try to automatically interact with an available oxd-server and attempt to register a site. It does so by searching for connection parameters in local disk, Java system properties or just assuming typical default values.
-
-Site Registration is an important API operation since it supplies **"oxd-id"**, a value required to perform any operation of the API.
-
-If no site registration was possible upon start, the UI of the app will show you a warning stating that action needs to be taken and will take you to a form to complete/provide required values.
-
-Every time a Site Registration is successfully performed by means of the UI, the settings are saved to disk (in a temp directory of your OS). This way there is no need to re-enter info after subsequent restarts.
-
-## Supplying parameters to the app
-
-You can also provide specific values upon start to override the default values used when no file exists in the temporary directory. The way to supply values is by passing Java properties this way:
+For more information on how to add attributes, visit this [page](https://www.gluu.org/docs/ce/admin-guide/attribute/#add-the-attribute-to-ldap). Additionally, you have to associate the new attributes to the appropriate LDAP object class for user:
 
 ```
-mvn -Dprop1=value1 -Dprop2=value2 ... jetty:run
+objectclass ( oxObjectClass:... NAME 'gluuPerson'
+	...
+	MAY ( ...$ oxPreferredMethod $ oxOTPDevices $ oxMobileDevices)
+	...
 ```
 
-The following table lists the set of properties you can provide:
+Restart your LDAP service as indicated in the [attribute management page](https://www.gluu.org/docs/ce/admin-guide/attribute/#add-the-attribute-to-ldap).
 
-|Name|Description|Example value|
-|-|-|-|
-|oxd.server.op-host|The location of the OpenID Provider|https://my.gluu-server.com|
-|oxd.server.host|The name of host where the oxd-server is located|localhost|
-|oxd.server.port|The port of oxd-server|8080|
-|oxd.server.is-https|If present, the app will assume that server and port provided (or defaulted) are that of the https extension|Any value (even empty will work)|
-|oxd.server.acr-values|A comma-separated list of acrs that will be used in Site Registration and Get Authorization URL operations of the API|`auth_ldap_server`|
-|oxd.server.scopes|A comma-separated list of scopes supported by the OP|openid, profile|
-|oxd.sample.host|By default this app is accessible at https://localhost:8463/. With this property you can provide a different host name|my.own.box|
-|oxd.sample.port|By default this app runs on port 8463. With this property you can provide a different port|8080|
-|oxd.sample.skip-conf-file|If this property is present, the app will ignore the settings file if any|Any value (even empty will work)|
+## Create a new Jetty base
 
-The example above shows how to start the app bound to port 1234, using an oxd-https-extension located at `https://my.oxd-ext.org` and an OP located at `https://my.op-provider.com`.
+A Jetty base allows isolation among web applications as well as among configurations in the same Jetty server. Credential manager must run on its own dedicated base so you will have to create one. Use [these instructions](http://www.eclipse.org/jetty/documentation/current/quickstart-running-jetty.html) as a guide.
 
-```
-mvn 	-Doxd.sample.skip-conf-file -Doxd.sample.port=1234 
-	-Doxd.server.is-https -Doxd.server.host=my.oxd-ext.org -Doxd.server.port=443 -Doxd.server.op-host=https://my.op-provider.com 
-	jetty:run
-```
+The following switch is recommended: `--add-to-start=jsp,servlets,ssl,http,deploy,https,console-capture`.
 
-This way your application will be accessible at https://localhost:1234/. Not that `https` MUST always be used. The project files `jetty-ssl.xml`, `jetty-https.xml` and `keystore` already automate the setup in order to support SSL.
+Make the SSL configurations required for your Jetty instance. This can be done in different ways. You can use [these instructions](http://www.eclipse.org/jetty/documentation/current/configuring-ssl.html) as a guide.
 
-## Deep diving the code
+!!! Warning: 
+    Running cred-manager over **SSL** is a requirement.
 
-This app is organized as a Maven project, so it adheres to usual maven's structure conventions.
+## Create a sample configuration file
 
-If you are interested in the logic behind project, for instance to understand how `oxd-java` library is actually being used, keep reading.
+Credential manager reads all its required runtime configurations from a file called `cred-manager.json`. This file is expected to reside inside a `conf` directory placed in a folder whose location is given by the Java system property *gluu.base*. If such system property is not present, the default value used is `/etc/gluu`. 
 
-The following table depicts the overall anatomy of the application:
-
-|Location|Description|
-|-|-|
-|`webapp` folder|basic UI pages (facelets) and templates|
-|`webapp/static`|css and javascript assets|
-|`webapp/oidc`|UI pages implementing a sample authentication workflow|
-|package `org.xdi.oxd.sample.listener`|Triggers the execution of upon-start logic|
-|package `org.xdi.oxd.sample.bean`|Beans that back UI pages, hold configurations, and interact with oxd-server|
-
-The last row (`org.xdi.oxd.sample.bean`) deserves a deeper look. Particularly the class `OxdService` that represents an application-scoped bean employed to issue the API calls to oxd via oxd-java library.
-
-Note how maven's `pom.xml` file lists `oxd-common` and `oxd-client` as one of the first required dependencies for the project.
-
-The public methods in `OxdService` map directly to OpenID Authorization Code flow steps. Note how every method accounts for two paths: one for standard oxd-server communication and other for oxd-https-extension.
-
-For standard (socket-based) oxd-server communication, an instance of 
-[CommandClient](https://github.com/GluuFederation/oxd/blob/version_3.1.2/oxd-client/src/main/java/org/xdi/oxd/client/CommandClient.java) is used. This instance is reused throughout all API calls. 
-
-When it comes to https, all requests are sent using a [RestEasy](http://resteasy.jboss.org/docs.html) Client via HTTP POST. Note how requests are sent accompanied by an authorization header whose value is that of an access token previously obtained by calling the Get Client Token API operation.
-
-All API calls resemble the way it's already depicted in the oxd-java [doc page](https://gluu.org/docs/oxd/libraries/languages/java/) so we are not getting into those details here. Just note that in this project most of parameters passed are obtained directly from an instance of `OxdConfig` class, which is an application-scoped bean that holds configuration data. These values are set early during application start (#what-happens-upon-start) or updated when you use the "settings" page of the application.
-
-Also worth noting is that parameters sent are always wrapped in instances whose classes belong to package [`org.xdi.oxd.common.params`](https://github.com/GluuFederation/oxd/tree/version_3.1.2/oxd-common/src/main/java/org/xdi/oxd/common/params).
-
-## Java docs
-
-In terms of size this is a tiny application but if you want to read api docs of the few classes, just issue:
+Please add the mentioned property to your Jetty base. This is usually done by inserting an entry in the `start.ini` file of the recently created jetty base directory, like this:
 
 ```
-mvn javadoc:javadoc
+	...
+	-Dgluu.base=/opt/gluu/jetty/cred-manager
 ```
 
-and navigate to folder `target/site/apidocs`.
+Create the `conf` directory and copy a [sample configuration file](https://github.com/GluuFederation/cred-manager/blob/master/configurations/cred-manager.json) there.
 
-## FAQ
+Further on, in the [configuration section](#configuration-file), you will learn how to tweak this file to suit your needs.
 
-### The console shows errors upon start, what's wrong?
+Ensure the operating system that runs Jetty has read/write access to this file.
 
-As the app attemts to do Site Registration when starting, this may lead to some stack traces shown if the operation was not successful. This is normal for the very first time you run it if you just issued `mvn jetty:run` (because there is no means to infer for instance, the URL of the OP you are trying to use). 
+## Set location for logs
 
-An error trace like 
+Additional to *gluu.base* cred-manager uses another system property: *log.base*. This one is used to determine where to write logs. Log files are stored inside a `log` directory relative to the folder pointed to by *log.base*. Both *gluu.base* and *log.base* can point to the same location.
+
+The following is an example of a `start.ini` file
 
 ```
-ERROR oxd.sample.bean.OxdService OxdService.java:73- Connection refused: connect
-...
-WARN  oxd.sample.bean.OxdService OxdService.java:76- Registration failed
+	...
+	-Dgluu.base=/opt/gluu/jetty/cred-manager
+	-Dlog.base=/opt/gluu/jetty/cred-manager
+```	
+
+The set up of these environment properties resemble the same pattern currently used in **oxAuth** and **oxTrust**.
+
+## Add the "credmanager" custom scripts and dependencies
+
+In oxTrust admin UI, add a new custom script named **credmanager** with the contents of file `cred-manager.py` found [here](https://github.com/GluuFederation/cred-manager/blob/master/configurations). To do so visit `Configuration` > `Manage custom scripts` > `Person authentication`. Use the appropriate file according to your Gluu server version.
+
+Add the following configuration properties to the script:
+
+* **supergluu_app_id**. As value use exactly the same you will provide for *"authz_redirect_uri"* in the [configuration file](#configuration-file). In most cases this is the URL where the cred-manager application will be published.
+* **u2f_app_id**. As value use exactly the same you will provide for *"app_id"* under *"u2f_settings"* in the [configuration file](#configuration-file). In most cases this is the URL of your Gluu server host (aka *oxAuth issuer* URL).
+
+Do not check "Enabled" yet. Just save your changes using the button provided at the bottom of the page.
+
+Transfer the associated custom login pages of **credmanager** to your server:
+
+* Inside chroot, create a directory named `cm` under `/opt/gluu/jetty/oxauth/custom/pages`. Copy the files with `xhtml` and `xml` extension found at [https://github.com/GluuFederation/cred-manager/blob/master/configurations](https://github.com/GluuFederation/cred-manager/blob/master/configurations) to the created folder. Use the version of files matching your Gluu server.
+
+Add libraries required by the script:
+
+* Copy this [jar file](http://search.maven.org/remotecontent?filepath=com/twilio/sdk/twilio/7.12.0/twilio-7.12.0-jar-with-dependencies.jar)(~7MB) to `/opt/gluu/jetty/oxauth/lib/ext` inside Gluu chroot. Ensure the operating system user that runs Jetty has read-access to it.
+
+Finally, in the tab labeled "Client registration" add a new **credmanager** custom script using the contents of this [file](https://github.com/GluuFederation/cred-manager/blob/master/configurations/3.1.2/client_registration.py). 
+
+Add the following configuration properties to the script:
+
+* **client_redirect_uris**. As value use exactly the same you will provide for *"authz_redirect_uri"* in the [configuration file](#configuration-file). In most cases this is the URL where the cred-manager application will be published.
+
+Check "enabled" and the press the "update button".
+
+## Enable custom scripts for authentication methods
+
+In oxTrust UI, navigate to `Configuration` > `Manage custom scripts`. Enable the custom scripts required for your particular case. For instance, if you plan to offer users the possibility to enroll u2f keys, enable the u2f script, if you want to support OTP sent via SMS, enable the Twilio script.
+
+!!! Note: 
+    If you haven't setup custom scripts before, the [User authentication intro](https://www.gluu.org/docs/ce/authn-guide/intro) and [Interception scripts page](https://www.gluu.org/docs/ce/admin-guide/custom-script) are important reading. A recommended practice is to enable one script, then add (enable) the associated method in cred-manager, and once you can enroll devices of this kind, continue with the rest of methods.
+
+Ensure that settings of scripts are properly configured. It is advisable to:
+
+* Check the contents of file `oxauth_script.log` (found at `/opt/gluu/jetty/oxauth/logs`). You should not see errors there but only successful initialization messages. Every time you enable a script, you have to wait one minute for the server to pick the changes.
+
+* Test scripts are actually working fine. To see a script in action, you may change the authentication method used in oxTrust to test a certain script: go to `Manage authentication` > `Default authentication method` > `oxTrust acr`, and choose the name of the script of interest. Wait a couple of minutes and try to login in a different browser or private browsing session.
+
+Once you are confident of the behavior of your custom scripts, proceed to enable the already listed script called **credmanager** under the "Person Authentication" tab. This script is a key requirement for the application to work. Just ensure the `oxauth_script.log` says it is inited correctly - no need to use it as oxTrust default authentication mechanism. Ensure the script properties are:
+
+* **supergluu_app_id** (normally points to the URL where cred-manager will be accesible, e.g. `https://mygluuhost.com/cred-manager`)
+* **u2f_app_id** (normally points to the server itself, e.g. `https://mygluuhost.com`)
+
+Finally in the "Client registration" tab, enable the script labeled "Cred-manager Client Registration script". Make sure the property **client_redirect_uris** looks like `https://mygluuhost.com/cred-manager`.
+
+### Additional settings
+
+* If you plan to use Super Gluu or a TOTP/HOTP mobile app as authentication method, and you are running cred-manager outside the Gluu Server chroot, please create filesystem links so that files referenced by the custom scripts (Super Gluu or TOTP/HOTP) can be readable from outside the Gluu container. For instance, there is a property labeled *"otp_conf_file"* for the OTP script that references a file like `/etc/certs/otp_configuration.json`. You should create a link such that `/etc/certs/otp_configuration.json` actually points to `/opt/gluu-server-<version>/etc/certs/otp_configuration.json`.
+
+* If you plan to use OTP messages sent by SMS as an authentication method for your users, also copy the jar file of Twilio 6.3 library found [here](http://search.maven.org/remotecontent?filepath=com/twilio/sdk/twilio-java-sdk/6.3.0/twilio-java-sdk-6.3.0-jar-with-dependencies.jar)(~4MB) to `/opt/gluu/jetty/oxauth/lib/ext` inside Gluu chroot. Ensure the operating system user that runs Jetty has read-access to it.
+
+## Configuration File
+
+Credential manager reads all its required runtime configurations from a file called `cred-manager.json`. Create your own as instructed [here](#create-a-sample-configuration-file).
+
+Setting up this file is a one-time task. After the first successful application start, all administrative configurations can be performed through the UI of the application itself.
+
+!!! Note: 
+    Ensure that the operating system user that runs Jetty has read/write permissions over this file. Backup it up once you feel comfortable with the configuration of the application.
+
+The following is an example of the contents of `cred-manager.json`. **Note:** The comments added make the file not a valid Json tree.
+
+```
+{
+"ldap_settings":{
+	"ox-ldap_location": "/etc/gluu/conf/ox-ldap.properties",	//Location of ox-ldap.properties file
+	"salt" : "/etc/gluu/conf/salt", //Optional. location of salt properties file
+	"applianceInum": "@!...",
+	"orgInum": "@!..."
+},
+"enable_pass_reset": true,	//optional
+"oxd_config": { 
+	"host": "localhost",
+	"port": 8099,
+	"use_https_extension" : true,	//optional
+	"authz_redirect_uri" : "..."  //must be the root URL for this webapp
+},
+"enabled_methods": [twilio_sms, super_gluu],	//optional
+"u2f_settings" : {	//optional
+	"u2f_relative_uri" : "restv1/fido-u2f-configuration",	//optional. Endpoint for registration of fido devices
+	"app_id" : null		//optional. The U2F app ID
+},
+"branding_path" : "/opt/gluu/jetty/cred-manager/custom",	//optional. Used only if custom branding is required
+"min_creds_2FA" : 2,	//optional
+}
 ```
 
-can be ignored. Once you get to the app's home page, you will be presented with a form to supply missing values and perform Site Registration.
+Most properties there are optional. The following is a minimalist example:
+
+```
+{
+"ldap_settings":{
+	"ox-ldap_location": "/etc/gluu/conf/ox-ldap.properties",
+	"salt" : "/etc/gluu/conf/salt",
+	"applianceInum": "@!...",
+	"orgInum": "@!..."
+},
+"oxd_config": { 
+	"host": "localhost",
+	"port": 8099,
+	"authz_redirect_uri" : "https://acme.info/cred-manager"
+}
+}
+```
+
+You can find a sample configuration file [here](https://github.com/GluuFederation/cred-manager/blob/master/configurations/cred-manager.json). 
+
+Adjust the contents of this file to fit the needs of your organization. The remainder of this subsection gives useful hints to complete this task. The topic of custom branding will be regarded later.
 
 
-### How do I deploy this app in a servlet container?
+### Meaning conveyed by the contents of `cred-manager.json`
 
-The project was designed so configuration and deployment tasks were minimal through the use of Maven build tool and the Jetty Maven Plugin.
+The following are some important notes on how cred-manager uses the information found in the configuration file:
 
-If you still want to make a separate deployment in a Jetty container, you may have to create a Jetty base (use [these instructions](http://www.eclipse.org/jetty/documentation/current/quickstart-running-jetty.html) as a guide) and do [SSL](http://www.eclipse.org/jetty/documentation/current/configuring-ssl.html) configurations required.
+* cred-manager uses `ox-ldap.properties` file to lookup LDAP connection settings. Once connected to LDAP, cred-manager searches for:
+	* displayName attribute in the `o` branch to determine the organization name to show in the UI
+	* oxTrust's oxTrustConfCacheRefresh attribute to determine if a source backend LDAP is being used ("sourceConfigs" property inside the JSON content). If so, password reset won't be enabled regardless of the value of *"enable_pass_reset"*. 
+	* oxAuth's oxAuthConfDynamic attribute to get:
+		* the OIDC config endpoint (property "openIdConfigurationEndpoint" in JSON content)
+		* the issuer attribute
+		* dynamicRegistrationExpirationTime attribute
 
-To generate your war file, you will have to use the Maven WAR plugin and do adjustments to `pom.xml` file of project. For more information see corresponding [plugin's page](https://maven.apache.org/plugins/maven-war-plugin/).
+* If *"enable_pass_reset"* is not provided and there is no backend LDAP detected, a default value of false is assumed.
 
-Instructions on how to run the project using a different servlet container or Java application server is out of the scope of this document.
+* If *"enabled_methods"* is not present, or has empty value or null, cred-manager will use all supported authentication methods (that is, all methods corresponding to the custom scripts enabled in the previous section). A method is ignored if its associated custom script has not been enabled yet. To quickly determine the active methods supported by your Gluu Server inspect the `acr_supported_values` property of the server's OIDC metadata document (e.g. `https://<host>/.well-known/openid-configuration`)
+
+* *"authz_redirect_uri"* will be used as the return URL after the login process takes place at the IDP. For this, the root URL where the webapp will be accessible must be used. Don't mind about the trailing slash. 
+
+* If *"u2f_relative_uri"* is not present, or has empty value or null, it will default to ".well-known/fido-u2f-configuration". The value of issuer property found in LDAP followed by a slash (/) will be prepended to this to get a correct endpoint URL for U2F devices enrolling.
+
+* If *"app_id"* is not present, or has empty value or null, it will default to the *issuer* value in oxAuth's *oxAuthConfDynamic*. This string will be used as the facet for this application (in [U2F dev jargon](https://developers.yubico.com/U2F/App_ID.html)). In very uncommon circumstances you will have to supply a value here.
+
+* If "min_creds_2FA" is not present it will default to 2. This property defines the minimum amount of credentials any user must enroll to be able to use second factor authentication.
 
 
-### What to do if "Check your settings or the console output" appears in the UI
+### "Hidden" properties
 
-Take a look a the error traces to help diagnose the problem. This is often due to connectivity problems, e.g: oxd-server is down or it cannot reach your OP. 
+These are extra properties that can be set in the JSON file to tweak certain behaviors. Mostly useful in development scenarios:
+
+* *"gluu_version"*: cred-manager attempts to check the "Implementation-Version" entry in the `MANIFEST.MF` file inside `oxauth.war` to guess the Gluu version it is running on. Providing a value here obviates the need for inspecting the war file. When providing a value use a string (e.g. "3.1.2").
+
+* *"log_level"*: Customizes the default logging level used by the application. If not provided, default value used is **"INFO"**. Valid values are: OFF, FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL.
+
+## Run the app
+
+Copy the [.war file](http://ox.gluu.org/maven/org/xdi/cred-manager/) of cred-manager to your [jetty base webapps directory](installation.md#create-a-new-jetty-base). You can copy a exploded directory too.  Depending on previous setup, you may need to issue a command for starting the app, or if hot deployment is used (default behavior in Jetty) this is not needed.
+
+Wait a few seconds while the app starts. Check the log file of the app (e.g. `/opt/gluu/jetty/cred-manager/logs/2017_10_31.jetty.log`). You should see a message that reads "WEBAPP INITIALIZED SUCCESSFULLY". Check the [troubleshooting guide](troubleshooting.md) if things are not going as expected.
+
+When the application is started, oxd client registration takes place. This can be verified in oxTrust where a new client appears listed with a name similar to "cred-manager".
+
+## Apply other configurations
+
+* Note that after the first successful application start, all administrative configurations can be performed through the UI of the application itself. If, for some reason, you still want to edit the `cred-manager.json` file, an application restart is required to pick the changes. 
+
+* Remember that you don't even need to provide "enabled_methods" in `cred-manager.json` if you just want to be able to use all credential types supported (currently limited to OTP device, verified mobile phone, U2F key, and super gluu device only).
+
+* Ideally, not only cred-manager should use the **credmanager** script, but all applications under the SSO umbrella in your organization. This script allows to implement an authentication workflow based on credentials already enrolled by users and their preferences.  For this to happen, apply **credmanager** as the default authentication mechanism at the server level: in oxTrust go to `Manage authentication` > `Default authentication method` > `Default acr` and choose **credmanager**.
