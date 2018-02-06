@@ -29,8 +29,8 @@ The following resources are supported:
 
 |Resource|Schema URI|Notes|
 |-|-|-|
-|User|urn:ietf:params:scim:schemas:core:2.0:User|See section 4.1 of RFC 7643|
-|Group|urn:ietf:params:scim:schemas:core:2.0:Group|See section 4.2 of RFC 7643|
+|User|urn:ietf:params:scim:schemas:core:2.0:User|See [section 4.1](https://tools.ietf.org/html/rfc7643#section-4.1) of RFC 7643|
+|Group|urn:ietf:params:scim:schemas:core:2.0:Group|See [section 4.2](https://tools.ietf.org/html/rfc7643#section-4.2) of RFC 7643|
 |Fido devices|urn:ietf:params:scim:schemas:core:2.0:FidoDevice|Represents a [fido credential](../user-management/scim2.md#fido-devices) enrolled by a user|
 
 Additionally the following resource extensions are defined:
@@ -39,7 +39,7 @@ Additionally the following resource extensions are defined:
 |-|-|-|
 |User|urn:ietf:params:scim:schemas:extension:gluu:2.0:User|Attributes can be assigned dynamically via oxTrust|
 
-To learn about the specific capabilities of the service, visit the `/ServiceProvider`, `/ResourceTypes`,  and `/Schemas` endpoints (see below). These endpoints are not protected so you can use a web browser to check. 
+To learn about the specific capabilities of the service, inspect your `/ServiceProvider`, `/ResourceTypes`,  and `/Schemas` endpoints (see [below](#service-provider-configuration-endpoints)). These endpoints are not protected so you can use a web browser to check. 
 
 # SCIM Endpoints
 
@@ -56,7 +56,7 @@ The following table summarizes the available endpoints in Gluu implementation of
 |[/Schemas](#schemas)||GET|Retrieve supported schemas info|
 
 !!! Note:
-    Actual endpoint URLs are prefixed accordingly with the root URL of SCIM API. As an example, the user's endpoint URL to use in your application should be `https://your.gluu-host.com/identity/restv1/scim/v2/Users`.
+    Actual endpoint URLs are prefixed accordingly with the root URL of SCIM API. As an example, the user's endpoint URL to use in your applications should be `https://your.gluu-host.com/identity/restv1/scim/v2/Users`.
 
 SCIM 2.0 is governed by the [SCIM:Core Schema](https://tools.ietf.org/html/rfc7643) and [SCIM:Protocol](https://tools.ietf.org/html/rfc7644) spec docs. The latter contains full details about the API structure, so use it as a reference in your development tasks. 
 
@@ -64,7 +64,7 @@ SCIM 2.0 is governed by the [SCIM:Core Schema](https://tools.ietf.org/html/rfc76
 
 * Unless otherwise stated, all endpoints are protected via [UMA 2.0](../user-management/scim2.md#protection-using-uma) or [test mode](../user-management/scim2.md#protection-using-test-mode).
 
-* All payloads sent to endpoints using POST or PUT should be supplied using **_Content-Type:_** `application/scim+json` or `application/json`, and in UTF-8 encoding. Liwewise, output is sent from server in UTF-8.
+* All payloads sent to endpoints using POST or PUT should be supplied using *Content-Type:* `application/scim+json` or `application/json`, and using UTF-8 encoding. Liwewise, output is sent from server in UTF-8.
 
 ## `/Users`
 
@@ -119,7 +119,7 @@ Search users based on filter criteria (see [section 3.4.2](https://tools.ietf.or
 
 #### Response
 
-Output data is in form of a [ListResponse](#listresponse). Resources returned belong to <a name="/definitions/User">User</a>.
+Output data is in form of a [ListResponse](#/definitions/ListResponse). Resources returned belong to <a name="/definitions/User">User</a>.
 
 Status code 200 is returned for a successful response.
 
@@ -214,7 +214,7 @@ Search groups based on filter criteria (see [section 3.4.3](https://tools.ietf.o
 </table>
 
 #### Response
-Output data is in form of a [ListResponse](#listresponse). Resources returned belong to <a name="/definitions/User">User</a>.
+Output data is in form of a [ListResponse](#/definitions/ListResponse). Resources returned belong to <a name="/definitions/User">User</a>.
 
 Status code 200 is returned for a successful response.
 
@@ -358,7 +358,7 @@ Search groups based on filter criteria (see [section 3.4.2](https://tools.ietf.o
 
 #### Response
 
-Output data is in form of a [ListResponse](#listresponse). Resources returned belong to <a name="/definitions/Group">Group</a>.
+Output data is in form of a [ListResponse](#/definitions/ListResponse). Resources returned belong to <a name="/definitions/Group">Group</a>.
 
 Status code 200 is returned for a successful response.
 
@@ -453,7 +453,7 @@ Search groups based on filter criteria (see [section 3.4.3](https://tools.ietf.o
 </table>
 
 #### Response
-Output data is in form of a [ListResponse](#listresponse). Resources returned belong to <a name="/definitions/Group">Group</a>.
+Output data is in form of a [ListResponse](#/definitions/ListResponse). Resources returned belong to <a name="/definitions/Group">Group</a>.
 
 Status code 200 is returned for a successful response.
 
@@ -598,7 +598,7 @@ Search fido devices based on filter criteria (see [section 3.4.2](https://tools.
 
 #### Response
 
-Output data is in form of a [ListResponse](#listresponse). Resources returned belong to <a name="/definitions/FidoDevice">FidoDevice</a>.
+Output data is in form of a [ListResponse](#/definitions/ListResponse). Resources returned belong to <a name="/definitions/FidoDevice">FidoDevice</a>.
 
 Status code 200 is returned for a successful response.
 
@@ -655,7 +655,7 @@ Search fido devices based on filter criteria (see [section 3.4.3](https://tools.
 </table>
 
 #### Response
-Output data is in form of a [ListResponse](#listresponse). Resources returned belong to <a name="/definitions/FidoDevice">FidoDevice</a>.
+Output data is in form of a [ListResponse](#/definitions/ListResponse). Resources returned belong to <a name="/definitions/FidoDevice">FidoDevice</a>.
 
 Status code 200 is returned for a successful response.
 
@@ -811,7 +811,7 @@ None (no query params).
 
 #### Response
 
-Information about the types of resources available in the service (e.g., Users and Groups) in form of a [ListResponse](#listresponse). 
+Information about the types of resources available in the service (e.g., Users and Groups) in form of a [ListResponse](#/definitions/ListResponse). 
 
 It's possible to request the information for a single resource type by adding a resource name suffix to the URL, for instance `/ResourceTypes/User` for users. In this case, a json is returned according to section 6 of RFC 7643.
 
@@ -832,7 +832,7 @@ None (no query params).
 
 Retrieves the schemas in use by available resources (and which are accepted by the service provider).
 
-Output data is in form of a [ListResponse](#listresponse), however it's possible to request the information for a single resource type by adding a schema URI suffix to the URL, for instance `/Schemas/urn:ietf:params:scim:schemas:core:2.0:Group` for schema info about groups. In this case, a json is returned according to section 7 of RFC 7643.
+Output data is in form of a [ListResponse](#/definitions/ListResponse), however it's possible to request the information for a single resource type by adding a schema URI suffix to the URL, for instance `/Schemas/urn:ietf:params:scim:schemas:core:2.0:Group` for schema info about groups. In this case, a json is returned according to section 7 of RFC 7643.
 
 Status code 200 is returned for a successful response.
 
