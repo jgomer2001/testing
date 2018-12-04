@@ -8,9 +8,9 @@ Make it bark at your computer to get access or if it supports NFC just get it cl
 
 1. In script contents paste [this](./pets.py)
 
-1. Save & check `oxauth_script.log` shows the following: `Pet. Initialized successfully`
+1. Save & check that `oxauth_script.log` shows the following: `Pet. Initialized successfully`
 
-1. Copy [this](./pet.xhtml) custom page to `/opt/gluu/jetty/oxauth/custom/pages/auth` inside chroot
+1. Copy [this](./pets.xhtml) custom page to `/opt/gluu/jetty/oxauth/custom/pages/auth` inside chroot
 
 ... no need for restarts
 
@@ -24,6 +24,8 @@ In an app create an authorization request using `acr` equal to the displayName u
 
 Please read all the script code first... it's full of comments
 
+### Step 1
+
 Flow starts with a call to `getPageForStep` with step=1, then `isValidAuthenticationMethod`
 
 This makes the `login.xhtml` (the default SSO gluu form) to be parsed by JSF (in oxAuth)
@@ -36,10 +38,12 @@ Then `getApiVersion`, `getExtraParametersForStep` and `getCountAuthenticationSte
 
 It ends here if user has no petname stored in profile. If the call to `authenticate` returned True, authorization is successful, otherwise denied.
 
-If he had petname, flow jumps to step 2: `getPageForStep`, `isValidAuthenticationMethod`
+### Step 2
 
-Now the `/auth/pets.xhtml` come to play... See the comments there
+If he had petname, flow starts again for step 2: `getPageForStep`, `isValidAuthenticationMethod`
+
+Now the `/auth/pets.xhtml` comes to play... See the comments [there](./pets.xhtml)
 
 calls proceeding are: `prepareForStep`, `authenticate`, `getApiVersion`, `getExtraParametersForStep` and `getCountAuthenticationSteps`.
 
-Sometimes I see `getExtraParametersForStep` calls also after `getPageForStep`... :-\
+Sometimes I see `getExtraParametersForStep` calls also after `getPageForStep` ... :-\
