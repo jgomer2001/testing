@@ -21,6 +21,8 @@ tags:
    description: Endpoints for management of the User resource
  - name: group
    description: Endpoints for management of the Group resource
+ - name: discovery
+   description: Endpoints to facilitate discovery of SCIM service provider features 
 
 produces:
   - application/scim+json
@@ -1072,6 +1074,146 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
 
+  /Bulk:
+    post:
+      consumes:
+        - application/scim+json
+        - application/json
+
+      description: Send several resource operations in a single request (see section 3.7 of RFC 7644)
+      
+      parameters:
+        -
+          name: request
+          in: body
+          description: Payload describing the operations to perform
+          required: true
+          schema:
+            $ref: '#/definitions/BulkRequest'
+
+      responses:
+        200:
+          description: |
+            Successful operation. Every individual operation will report its own output status.
+            Reponses are only included for failed operations.
+          schema:
+            $ref: '#/definitions/BulkData'
+        500:
+          description: There was an unexpected failure executing the operation
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /ServiceProviderConfig:
+    get:
+      tags:
+        - discovery
+      description: Describes the SCIM specification features available (see section 5 of RFC 7644)
+
+      responses:
+        200:
+          description: Successful operation
+          schema:
+            $ref: '#/definitions/ServiceProviderConfigResponse'
+        500:
+          description: There was an unexpected failure executing the operation
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /ResourceTypes:
+    get:
+      tags:
+        - discovery
+      description: |
+        This endpoint is used to discover the types of resources available (see section 4 of RFC 7644)
+
+      responses:
+        200:
+          description: Successful operation
+          schema:
+            $ref: '#/definitions/ResourceTypeListResponse'
+        500:
+          description: There was an unexpected failure executing the operation
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      
+  /ResourceTypes/{resource}:
+    get:
+      tags:
+        - discovery
+      description: |
+        Describes the endpoint, schemas and extensions supported by a specific kind of resource.
+        It returns a specific portion of the ouput of the more general /Resources endpoint  
+      
+      parameters:
+        -
+          name: resource
+          in: path
+          required: true
+          type: string
+          enum:
+            - User
+            - Group
+            - FidoDevice
+            - Fido2Device
+            
+      responses:
+        200:
+          description: Successful operation
+          schema:
+            $ref: '#/definitions/ResourceType'
+        500:
+          description: There was an unexpected failure executing the operation
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+    
+  /Schemas:
+    get:
+      tags:
+        - discovery
+      description: |
+        Endpoint used to retrieve information about schemas supported (see section 
+        4 of RFC 7644)
+      
+      responses:
+        200:
+          description: Successful operation
+          schema:
+            $ref: '#/definitions/SchemaListResponse'        
+        500:
+          description: There was an unexpected failure executing the operation
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+    
+  /Schemas/{uri}:
+    get:
+      tags:
+        - discovery
+      description: Retrieves information about a specific resource  
+      
+      parameters:
+        -
+          name: uri
+          in: path
+          required: true
+          description: Schema URI of a particular resource type 
+          type: string
+          enum:
+            - urn:ietf:params:scim:schemas:core:2.0:User
+            - urn:ietf:params:scim:schemas:extension:gluu:2.0:User
+            - urn:ietf:params:scim:schemas:core:2.0:Group
+            - urn:ietf:params:scim:schemas:core:2.0:Fido2Device
+            - urn:ietf:params:scim:schemas:core:2.0:FidoDevice
+            
+      responses:
+        200:
+          description: Successful operation
+          schema:
+            $ref: '#/definitions/SchemaResource'
+        500:
+          description: There was an unexpected failure executing the operation
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+    
 definitions:
   SearchRequest:
     description: See section 3.4.3 of RFC 7644
@@ -1099,39 +1241,7 @@ definitions:
       startIndex:
         type: integer
       count:
-        type: integer
-  PatchOperation:
-    description: See section 3.5.2 of RFC 7644
-    type: object
-    required:
-      - operation
-    properties:
-      operation:
-        type: string
-        enum:
-          - add
-          - remove
-          - replace
-      path:
-        type: string
-        description: Required when type is remove, optional otherwise
-      value:
-        type: object
-        description: Only required when type is add or replace
-  PatchRequest:
-    type: object
-    required:
-      - Operations
-    properties:
-      schemas:
-        type: array
-        items:
-          type: string
-          example: "urn:ietf:params:scim:api:messages:2.0:PatchOp"
-      Operations:
-        type: array
-        items:
-          $ref: '#/definitions/PatchOperation'    
+        type: integer    
   ErrorResponse:
     description: See section 3.12 of RFC 7644
     type: object
@@ -1150,6 +1260,167 @@ definitions:
         type: string
       detail:
         type: string
+  ServiceProviderConfigResponse:
+    description: See section 5 of RFC 7643
+    type: object
+    properties:
+      schemas:
+        type: array
+        items:
+          type: string
+          example: "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
+      meta:
+        type: object
+        properties:
+          resourceType:
+            type: string
+          location:
+            type: string
+      documentationUri:
+        type: string
+      patch:
+        type: object
+        properties:
+          supported:
+            type: boolean
+      bulk:
+        type: object
+        properties:
+          supported:
+            type: boolean
+          maxOperations:
+            type: integer
+          maxPayloadSize:
+            type: integer
+      filter:
+        type: object
+        properties:
+          supported:
+            type: boolean
+          maxResults:
+            type: integer   
+      changePassword:
+        type: object
+        properties:
+          supported:
+            type: boolean
+      sort:
+        type: object
+        properties:
+          supported:
+            type: boolean
+      etag:
+        type: object
+        properties:
+          supported:
+            type: boolean
+      authenticationSchemes:
+        properties:
+          type:
+            type: string
+            example: oauth2
+          name:
+            type: string
+          description:
+            type: string
+          specUri:
+            type: string
+          documentationUri:
+            type: string
+          primary:
+            type: boolean
+  ResourceType:
+    description: See section 6 of RFC 7643
+    type: object
+    properties:
+      schemas:
+        type: array
+        items:
+          type: string
+          example: "urn:ietf:params:scim:schemas:core:2.0:ResourceType"
+      id:
+        type: string
+      meta:
+        type: object
+        properties:
+          resourceType:
+            type: string
+          location:
+            type: string
+      name:
+        type: string
+      description:
+        type: string
+      endpoint:
+        type: string
+      schema:
+        type: string
+      schemaExtensions:
+        type: object
+        properties:
+          schema:
+            type: string
+          required:
+            type: boolean
+  SchemaAttribute:
+    description: A recursive definition. Note how property subAttributes reuses SchemaAttribute for its definition
+    type: object
+    properties:
+      name:
+        type: string
+      type:
+        type: string
+      subAttributes:
+        type: array
+        items:
+          $ref: "#/definitions/SchemaAttribute"
+      multiValued:
+        type: boolean
+      description:
+        type: string
+      required:
+        type: string
+      canonicalValues:
+        type: array
+        items:
+          type: string
+      caseExact:
+        type: boolean
+      mutability:
+        type: string
+      returned:
+        type: string
+      uniqueness:
+        type: string
+      referenceTypes:
+        type: array
+        items:
+          type: string
+  SchemaResource:
+    type: object
+    properties:
+      schemas:
+        type: array
+        items:
+          type: string
+          example: "urn:ietf:params:scim:schemas:core:2.0:Schema"
+      id:
+        type: string
+      meta:
+        type: object
+        properties:
+          resourceType:
+            type: string
+          location:
+            type: string
+      name:
+        type: string
+      description:
+        type: string
+      attributes:
+        type: array
+        items:
+          $ref: "#/definitions/SchemaAttribute"
   BasicListResponse:
     type: object
     properties:
@@ -1202,6 +1473,97 @@ definitions:
             type: array
             items:
               $ref: "#/definitions/UserResource"
+  ResourceTypeListResponse:
+    allOf: 
+      - $ref: '#/definitions/BasicListResponse'
+      - type: object
+      - properties:
+          Resources:
+            type: array
+            items:
+              $ref: "#/definitions/ResourceType"
+  SchemaListResponse:
+    allOf: 
+      - $ref: '#/definitions/BasicListResponse'
+      - type: object
+      - properties:
+          Resources:
+            type: array
+            items:
+              $ref: "#/definitions/SchemaResource"
+  PatchOperation:
+    description: See section 3.5.2 of RFC 7644
+    type: object
+    required:
+      - operation
+    properties:
+      operation:
+        type: string
+        enum:
+          - add
+          - remove
+          - replace
+      path:
+        type: string
+        description: Required when type is remove, optional otherwise
+      value:
+        type: object
+        description: Only required when type is add or replace
+  PatchRequest:
+    type: object
+    required:
+      - Operations
+    properties:
+      schemas:
+        type: array
+        items:
+          type: string
+          example: "urn:ietf:params:scim:api:messages:2.0:PatchOp"
+      Operations:
+        type: array
+        items:
+          $ref: '#/definitions/PatchOperation'
+  BulkOperation:
+    description: See section 3.7 of RFC 7644
+    type: object
+    properties:
+      method:
+        type: string
+        example: "PUT"
+      bulkId:
+        type: string
+        description: |
+          Used to bind the id generated for a created resource (via POST) to a named variable for later reuse
+      path:
+        type: string
+      data:
+        type: object
+        description: Payload associated to this operation
+      location:
+        type: string
+        description: Used in responses of POST operations
+      response:
+        type: object
+      status:
+        type: string
+  BulkData:
+    type: object
+    properties:
+      schemas:
+        type: array
+        items:
+          type: string
+      Operations:
+        type: array
+        items:
+          $ref: '#/definitions/BulkOperation'
+  BulkRequest:
+    allOf: 
+      - $ref: '#/definitions/BulkData'
+      - type: object
+      - properties:
+          failOnErrors:
+            type: integer
   Meta:
     description: See section 3.1 of RFC 7643
     type: object
