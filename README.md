@@ -1,5 +1,5 @@
 # 
-
+ 
 |SCIM|LDAP|Type of resource|
 |-|-|-|
 |active|oxTrustActive|User|
