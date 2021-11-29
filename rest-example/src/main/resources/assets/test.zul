@@ -1,0 +1,6 @@
+<zk>
+    <div viewModel="@('org.gluu.casa.plugins.helloworld.HelloWorldVM')">
+    <label value="Check the logs, you'll see something. Check init method of HelloWorldVM too" />
+    </div>
+
+</zk>
