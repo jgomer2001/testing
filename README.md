@@ -23,6 +23,6 @@ Finish it</pre>
     error: "User entered a wrong password 3 times" }
 Finish it</pre>
 		</td>
-		<td>Flow failed. Error description attached</td>
+		<td>Flow failed. Error description `attached`</td>
 	</tr>
 </table>
