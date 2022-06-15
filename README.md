@@ -11,18 +11,18 @@ result = RRF "survey.ftl" obj
 <table>
 	<tr><th>Code</th><th>Meaning</th></tr>
 	<tr>
-		<th>
+		<td>
 <pre>it = { success: true, data: { userId: "as9233Qz", ... }}
 Finish it</pre>
-		</th>
-		<th>Flow finished successfully. Some relevant data attached</th>
+		</td>
+		<td>Flow finished successfully. Some relevant data attached</td>
 	</tr>
 	<tr>
-		<th>
+		<td>
 <pre>it = { success: false,
     error: "User entered a wrong password 3 times" }
 Finish it</pre>
-		</th>
-		<th>Flow failed. Error description attached</th>
+		</td>
+		<td>Flow failed. Error description attached</td>
 	</tr>
 </table>
