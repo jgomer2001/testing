@@ -25,4 +25,16 @@ Finish it</pre>
 		</td>
 		<td>Flow failed. Error description `attached`</td>
 	</tr>
+	<tr>
+		<td>
+		
+```
+it = { success: false,
+    error: "User entered a wrong password 3 times" }
+Finish it
+```
+
+		</td>
+		<td>Flow failed. Error description <code>attached</code></td>
+	</tr>
 </table>
