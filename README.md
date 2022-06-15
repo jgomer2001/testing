@@ -27,7 +27,7 @@ Finish it</pre>
 	</tr>
 	<tr>
 		<td>
-		
+
 ```
 it = { success: false,
     error: "User entered a wrong password 3 times" }
