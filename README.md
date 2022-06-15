@@ -26,7 +26,7 @@ Finish it</pre>
 		<td>Flow failed. Error description `attached`</td>
 	</tr>
 	<tr>
-		<td>
+<td>
 
 ```
 it = { success: false,
@@ -34,7 +34,7 @@ it = { success: false,
 Finish it
 ```
 
-		</td>
+</td>
 		<td>Flow failed. Error description <code>attached</code></td>
 	</tr>
 </table>
