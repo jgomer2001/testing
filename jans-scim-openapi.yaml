@@ -1201,10 +1201,13 @@ paths:
           application/scim+json:
             schema:
               $ref: '#/components/schemas/UserResource'
+            examples:
+              samplePayload:
+                $ref: '#/components/examples/minimalCreate'
           application/json:
             schema:
               $ref: '#/components/schemas/UserResource'
-            example:
+            examples:
               samplePayload:
                 summary: Sample payload
                 externalValue: 'https://raw.githubusercontent.com/JanssenProject/jans/main/jans-scim/client/src/test/resources/single/user_full_create.json'
@@ -2538,6 +2541,11 @@ components:
             type: array
             items:
               $ref: '#/components/schemas/GenericResource'
+  examples:
+    minimalCreate:
+      value:
+        userName: scim_test_bjensen_1
+      summary: Sample payload
   securitySchemes:
     scim_oauth:
       type: oauth2
