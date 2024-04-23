@@ -1,0 +1,35 @@
+[
+  {
+    "id": "Agama-start-Flow-447b2c30-945f-4d41-874c-e9639089c49e",
+    "type": "start",
+    "sourcePosition": "right",
+    "data": {
+      "id": "Agama-start-Flow-447b2c30-945f-4d41-874c-e9639089c49e",
+      "type": "Agama-start-Flow",
+      "position": {
+        "x": 30,
+        "y": 30
+      },
+      "inRepeatBlock": false,
+      "agamaData": {
+        "id": "Agama-start-Flow-447b2c30-945f-4d41-874c-e9639089c49e",
+        "type": "Agama-start-Flow",
+        "displayName": "abc",
+        "hasComment": true,
+        "comment": "",
+        "isTopLevelFlow": true,
+        "basepath": "",
+        "configParams": "{}",
+        "nodeIcon": "material-symbols:line-start-square",
+        "timeout": "",
+        "inputs": "",
+        "configs": "",
+        "flowname": "a.b.c"
+      }
+    },
+    "position": {
+      "x": 30,
+      "y": 30
+    }
+  }
+]
